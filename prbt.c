@@ -10,9 +10,11 @@
 struct prbt_option {
 	char *file_path;
 	char *out_path;
+	bool_t only_summary;
 } opts = {
 	.file_path = NULL,
 	.out_path = NULL,
+	.only_summary = FALSE,
 };
 
 static void usage(void);
@@ -66,8 +68,71 @@ static int parse_trace_header(int fd, FILE *fp,
 	return rc;
 }
 
-size_t load_trace_page(int fd, uint64_t page_idx, char *page,
-		       size_t page_size)
+static void print_trace_summary(int fd, FILE *fp,
+				union padded_rbtrace_fheader *prf)
+{
+	off_t off = 0;
+	off_t fsize = 0;
+	char buf[128];
+	struct rbtrace_record rr;
+	struct tm *gm = NULL;
+
+	fsize = lseek(fd, 0, SEEK_END);
+	if (fsize < (sizeof(*prf) + sizeof(rr))) {
+		fprintf(stderr, "Empty trace file!\n");
+		return;
+	}
+
+	if (prf->hdr.wrap_pos) {
+		off = prf->hdr.wrap_pos;
+	} else {
+		off = sizeof(*prf);
+	}
+
+	if (pread(fd, &rr, sizeof(rr), off) != sizeof(rr)) {
+		fprintf(stderr, "pread %ld bytes from off %ld failed, error:%d\n",
+			sizeof(rr), off, errno);
+		return;
+	}
+
+	gm = localtime(&rr.rr_timestamp.tv_sec);
+	if (gm == NULL) {
+		fprintf(stderr, "invalid timestamp %ld for first trace record!\n",
+			rr.rr_timestamp.tv_sec);
+		return;
+	}
+
+	strftime(buf, sizeof(buf), "%m-%d %H:%M:%S", gm);
+	fprintf(fp, "start time: %s\n", buf);
+
+	/* Wrapped file, last trace record is just before current one */
+	if (off >= (sizeof(*prf) + sizeof(rr))) {
+		off -= sizeof(rr);
+	}
+	/* Last trace record is at file end */
+	else {
+		off = fsize - sizeof(rr);
+	}
+
+	if (pread(fd, &rr, sizeof(rr), off) != sizeof(rr)) {
+		fprintf(stderr, "pread %ld bytes from off %ld failed, error:%d\n",
+			sizeof(rr), off, errno);
+		return;
+	}
+
+	gm = localtime(&rr.rr_timestamp.tv_sec);
+	if (gm == NULL) {
+		fprintf(stderr, "invalid timestamp %ld for last trace record!\n",
+			rr.rr_timestamp.tv_sec);
+		return;
+	}
+
+	strftime(buf, sizeof(buf), "%m-%d %H:%M:%S", gm);
+	fprintf(fp, "end time: %s\n", buf);
+}
+
+static size_t load_trace_page(int fd, uint64_t page_idx,
+			      char *page, size_t page_size)
 {
 	size_t nbytes;
 	off_t off;
@@ -101,12 +166,13 @@ static bool_t trace_print_fn(uint64_t idx, FILE *fp,
 
 	/* Format time stamp, cpu and thread ID */
 	nchars = snprintf(record_buf, sizeof(record_buf),
-			  "%02d-%02d %02d:%02d:%02d.%06ld %02d %08d ",
+			  "%02d-%02d %02d:%02d:%02d.%06ld %2d %8d ",
 			  gm->tm_mon + 1, gm->tm_mday, gm->tm_hour,
-			  gm->tm_min, gm->tm_sec, rr->rr_timestamp.tv_sec/1000,
+			  gm->tm_min, gm->tm_sec,
+			  rr->rr_timestamp.tv_nsec / 1000,
 			  rr->rr_cpuid, rr->rr_thread);
 
-	sprintf(record_buf + nchars, "%016lX %016lX %016lX %016lX\n",
+	sprintf(record_buf + nchars, "%16lX %16lX %16lX %16lX\n",
 		rr->rr_a0, rr->rr_a1, rr->rr_a2, rr->rr_a3);
 
 	fprintf(fp, record_buf);
@@ -180,13 +246,16 @@ int main(int argc, char *argv[])
 	union padded_rbtrace_fheader prf;
 	FILE *fp = NULL;
 
-	while ((ch = getopt(argc, argv, "f:o:h")) != -1) {
+	while ((ch = getopt(argc, argv, "f:o:sh")) != -1) {
 		switch (ch) {
 		case 'f':
 			opts.file_path = optarg;
 			break;
 		case 'o':
 			opts.out_path = optarg;
+			break;
+		case 's':
+			opts.only_summary = TRUE;
 			break;
 		case 'h':
 		default:
@@ -224,6 +293,11 @@ int main(int argc, char *argv[])
 		goto out;
 	}
 
+	if (opts.only_summary) {
+		print_trace_summary(fd, fp, &prf);
+		goto out;
+	}
+
 	parse_trace_file(fd, fp, &prf.hdr, trace_print_fn);
 
  out:
@@ -235,5 +309,9 @@ int main(int argc, char *argv[])
 
 static void usage(void)
 {
-	printf("Usage: ./prbt <options>\n");
+	printf("Usage: ./prbt <options>\n"
+	       "       [-f <trace-file>]  Specify trace file path\n"
+	       "       [-o <output-file>] Specify output file path\n"
+	       "       [-s]               Only show trace file summary\n"
+	       "       [-h]               Display this help message\n");
 }

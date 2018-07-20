@@ -20,3 +20,9 @@ $ ./rbt -o trace.dat
 ```
 $ ./rbt -c
 ```
+
+### print trace file
+
+```
+$ ./prbt -f trace.dat
+```
