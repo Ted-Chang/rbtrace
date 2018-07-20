@@ -23,7 +23,7 @@
 
 #define RBTRACE_IO_RING_SIZE	(64*1024)
 
-struct rbtrace_config rbtrace_cfgs[] = {
+struct rbtrace_config rbt_cfgs[] = {
 	{
 		RBTRACE_RING_IO,
 		"io",
@@ -33,7 +33,7 @@ struct rbtrace_config rbtrace_cfgs[] = {
 	},
 };
 
-STATIC_ASSERT((sizeof(rbtrace_cfgs)/sizeof(rbtrace_cfgs[0])) == RBTRACE_RING_MAX);
+STATIC_ASSERT((sizeof(rbt_cfgs)/sizeof(rbt_cfgs[0])) == RBTRACE_RING_MAX);
 
 struct rbtrace_global_data rbtrace_globals = {
 	.inited = FALSE,
@@ -51,7 +51,8 @@ void rbtrace_signal_thread(struct rbtrace_info *ri)
 {
 	(*rbtrace_globals.ring_ptr) = ri->ri_ring;
 	if (sem_post(rbtrace_globals.sem_ptr) == -1) {
-		DBG_ASSERT(0);
+		dprintf("ring:%d sem_post failed, error:%d\n",
+			ri->ri_ring, errno);
 	}
 }
 
@@ -208,7 +209,7 @@ size_t rbtrace_calc_shm_size(void)
 	size += sizeof(*rbtrace_globals.ring_ptr);
 
 	for (i = RBTRACE_RING_IO; i < RBTRACE_RING_MAX; i++) {
-		size += rbtrace_calc_ring_size(&rbtrace_cfgs[i]);
+		size += rbtrace_calc_ring_size(&rbt_cfgs[i]);
 	}
 
 	size += (RBTRACE_RING_MAX * sizeof(*rbtrace_globals.ri_ptr));
@@ -234,6 +235,7 @@ void rbtrace_globals_init(int shm_fd, char *shm_base,
 	rbtrace_globals.ri_ptr = (struct rbtrace_info *)(shm_base + offset);
 	offset += sizeof(struct rbtrace_info) * RBTRACE_RING_MAX;
 	rbtrace_globals.rr_base = (struct rbtrace_record *)(shm_base + offset);
+
 	rbtrace_globals.inited = TRUE;
 }
 

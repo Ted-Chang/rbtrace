@@ -10,14 +10,16 @@ struct rbtrace_option {
 	rbtrace_ring_t ring;
 	char *file;
 	uint64_t size;
-	uint64_t tflags;
+	uint64_t stflags;
+	uint64_t ctflags;
 	bool_t wrap;
 	bool_t zap;
 } opts = {
 	.ring = RBTRACE_RING_IO,
 	.file = NULL,
 	.size = 0,
-	.tflags = 0,
+	.stflags = 0,
+	.ctflags = 0,
 	.wrap = FALSE,
 	.zap = FALSE,
 };
@@ -27,6 +29,7 @@ char *rbtrace_op_str[] = {
 	"close",
 	"size",
 	"wrap",
+	"traffic-flags",
 	"zap",
 	"info",
 };
@@ -41,6 +44,11 @@ static char *rbtrace_op_to_str(rbtrace_op_t op)
 	return "unknown";
 }
 
+static uint64_t str_to_tflags(char *str)
+{
+	return 0;
+}
+
 static void usage(void);
 
 int main(int argc, char *argv[])
@@ -49,6 +57,7 @@ int main(int argc, char *argv[])
 	int ch = 0;
 	char *endptr = NULL;
 	rbtrace_op_t op = RBTRACE_OP_MAX;
+	struct rbtrace_op_tflags_arg tflags_arg;
 	bool_t rbtrace_inited = FALSE;
 	bool_t do_open = FALSE;
 	bool_t do_close = FALSE;
@@ -56,6 +65,8 @@ int main(int argc, char *argv[])
 	bool_t do_wrap = FALSE;
 	bool_t do_zap = FALSE;
 	bool_t do_info = FALSE;
+	bool_t do_set_tflags = FALSE;
+	bool_t do_clear_tflags = FALSE;
 
 	while ((ch = getopt(argc, argv, "r:o:cw:z:is:S:C:h")) != -1) {
 		switch (ch) {
@@ -113,8 +124,18 @@ int main(int argc, char *argv[])
 			do_size = TRUE;
 			break;
 		case 'S':
+			opts.stflags = str_to_tflags(optarg);
+			if (opts.stflags == 0) {
+				goto out;
+			}
+			do_set_tflags = TRUE;
 			break;
 		case 'C':
+			opts.ctflags = str_to_tflags(optarg);
+			if (opts.ctflags == 0) {
+				goto out;
+			}
+			do_clear_tflags = TRUE;
 			break;
 		case 'h':	// Fall through
 		default:
@@ -162,6 +183,24 @@ int main(int argc, char *argv[])
 	if (do_close) {
 		op = RBTRACE_OP_CLOSE;
 		rc = rbtrace_ctrl(opts.ring, op, NULL);
+		if (rc != 0) {
+			goto out;
+		}
+	}
+	if (do_set_tflags) {
+		tflags_arg.set = TRUE;
+		tflags_arg.tflags = opts.stflags;
+		op = RBTRACE_OP_TFLAGS;
+		rc = rbtrace_ctrl(opts.ring, op, &tflags_arg);
+		if (rc != 0) {
+			goto out;
+		}
+	}
+	if (do_clear_tflags) {
+		tflags_arg.set = FALSE;
+		tflags_arg.tflags = opts.ctflags;
+		op = RBTRACE_OP_TFLAGS;
+		rc = rbtrace_ctrl(opts.ring, op, &tflags_arg);
 		if (rc != 0) {
 			goto out;
 		}

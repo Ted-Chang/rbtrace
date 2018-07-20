@@ -68,9 +68,15 @@ typedef enum rbtrace_op {
 	RBTRACE_OP_SIZE,
 	RBTRACE_OP_WRAP,
 	RBTRACE_OP_ZAP,
+	RBTRACE_OP_TFLAGS,
 	RBTRACE_OP_INFO,
 	RBTRACE_OP_MAX,
 } rbtrace_op_t;
+
+struct rbtrace_op_tflags_arg {
+	bool_t set;
+	uint64_t tflags;
+};
 
 typedef int (*rbtrace_op_handler)(struct rbtrace_info *ri, void *argp);
 
