@@ -128,6 +128,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	size_t buf_size = 0;
 	int flush = 0;
 	int lost = 0;
+	bool_t update_hdr = FALSE;
 
 	if (rbtrace_fds[ring] == -1) {
 		dprintf("ring:%d invalid file descriptor!\n", ring);
@@ -137,26 +138,21 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	ri = &rbtrace_globals.ri_ptr[ring];
 	prf = &rbtrace_hdrs[ring];
 
-	/* Update file header if this ring is wrapped */
-	if ((prf->hdr.wrap_pos != 0) && (ri->ri_flags & RBTRACE_DO_WRAP)) {
-		ri->ri_seek = prf->hdr.wrap_pos;
-		prf->hdr.wrap_pos +=
-			ri->ri_size * sizeof(struct rbtrace_record);
-		if (pwrite(rbtrace_fds[ring], prf, sizeof(*prf), 0) !=
-		    sizeof(*prf)) {
-			dprintf("ring:%d update hdr failed, error:%d\n",
-				ring, errno);
-		}
-	}
-
 	if (do_flush) {
 		buf = (char *)(rbtrace_globals.rr_base + ri->ri_cir_off);
-		buf_size = (ri->ri_slot + 1) *
-			sizeof(struct rbtrace_record);
+		buf_size = (ri->ri_slot + 1) * sizeof(struct rbtrace_record);
 	} else {
 		buf = (char *)(rbtrace_globals.rr_base + ri->ri_alt_off);
 		buf_size = ri->ri_data_size;
 	}
+
+	/* Update file header if this ring is wrapped */
+	if (prf->hdr.wrap_pos && (ri->ri_flags & RBTRACE_DO_WRAP)) {
+		ri->ri_seek = prf->hdr.wrap_pos;
+		prf->hdr.wrap_pos += buf_size;
+		update_hdr = TRUE;
+	}
+
 	off = ri->ri_seek;
 
 	/* Write buffer content to file */
@@ -165,20 +161,21 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 			ring, errno);
 		return;
 	} else {
-		/* Clear the buffer if write success */
+		/* Clear the buffer to avoid poison data */
 		memset(buf, 0, buf_size);
 	}
 
 	ri->ri_seek += buf_size;
 
-	/* Close or wrap the file if buffer limit is reached */
-	if (ri->ri_seek > *rbtrace_globals.fsize_ptr) {
+	/* Close or wrap the file if buffer limit reached */
+	if (ri->ri_seek >= *rbtrace_globals.fsize_ptr) {
 		if (ri->ri_flags & RBTRACE_DO_CLOSE) {
 			/* Flush will be done in thread_fn */
 			dprintf("ring:%d user specified close.\n", ring);
 		} else if (ri->ri_flags & RBTRACE_DO_WRAP) {
-			/* Update trace file header */
+			/* Reset wrap position */
 			prf->hdr.wrap_pos = sizeof(*prf);
+			update_hdr = TRUE;
 		} else if (ri->ri_flags & RBTRACE_DO_ZAP) {
 			/* Close current and open a new trace file */
 			close(rbtrace_fds[ring]);
@@ -190,6 +187,14 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 			close(rbtrace_fds[ring]);
 			rbtrace_fds[ring] = -1;
 			ri->ri_flags &= ~RBTRACE_DO_DISK;
+		}
+	}
+
+	if (update_hdr) {
+		if (pwrite(rbtrace_fds[ring], prf, sizeof(*prf), 0) !=
+		    sizeof(*prf)) {
+			dprintf("ring:%d update hdr failed, error:%d\n",
+				ring, errno);
 		}
 	}
 

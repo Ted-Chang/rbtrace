@@ -31,6 +31,8 @@ char *rbtrace_op_str[] = {
 	"info",
 };
 
+STATIC_ASSERT(sizeof(rbtrace_op_str)/sizeof(rbtrace_op_str[0]) == RBTRACE_OP_MAX);
+
 static char *rbtrace_op_to_str(rbtrace_op_t op)
 {
 	if (op < RBTRACE_OP_MAX) {

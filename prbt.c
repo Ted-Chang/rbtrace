@@ -10,11 +10,15 @@
 struct prbt_option {
 	char *file_path;
 	char *out_path;
-	bool_t only_summary;
+	time_t start_time;
+	time_t end_time;
+	bool_t only_show_info;
 } opts = {
 	.file_path = NULL,
 	.out_path = NULL,
-	.only_summary = FALSE,
+	.start_time = 0,
+	.end_time = 0,
+	.only_show_info = FALSE,
 };
 
 static void usage(void);
@@ -24,6 +28,7 @@ static int parse_trace_header(int fd, FILE *fp,
 {
 	int rc = 0;
 	uint64_t nbytes = 0;
+	struct rbtrace_fheader *rf = &prf->hdr;
 	struct tm *gm = NULL;
 
 	nbytes = pread(fd, prf, sizeof(*prf), 0);
@@ -33,36 +38,39 @@ static int parse_trace_header(int fd, FILE *fp,
 		goto out;
 	}
 
-	if (strcmp(prf->hdr.magic, RBTRACE_FHEADER_MAGIC) != 0) {
+	if (strcmp(rf->magic, RBTRACE_FHEADER_MAGIC) != 0) {
 		rc = -1;
 		fprintf(stderr, "Invalid header magic!\n");
 		goto out;
 	}
 
-	if ((prf->hdr.major != RBTRACE_MAJOR) ||
-	    (prf->hdr.minor != RBTRACE_MINOR)) {
+	if ((rf->major != RBTRACE_MAJOR) ||
+	    (rf->minor != RBTRACE_MINOR)) {
 		rc = -1;
 		fprintf(stderr, "Revision %d.%d mismatch! %d.%d supported\n",
-			prf->hdr.major, prf->hdr.minor,
+			rf->major, rf->minor,
 			RBTRACE_MAJOR, RBTRACE_MINOR);
 		goto out;
 	} else {
-		fprintf(fp, "REVISION: %d.%d\n", prf->hdr.major, prf->hdr.minor);
+		fprintf(fp, "REVISION: %d.%d\n", rf->major, rf->minor);
 	}
 
-	gm = localtime(&prf->hdr.timestamp.tv_sec);
+	gm = localtime(&rf->timestamp.tv_sec);
 	if (gm == NULL) {
 		rc = -1;
 		fprintf(stderr, "Invalid timestamp in trace header!\n");
 	} else {
 		fprintf(fp, "OPEN AT: %02d/%02d %02d:%02d:%02d.%06ld\n",
 			gm->tm_mon + 1, gm->tm_mday, gm->tm_hour, gm->tm_min,
-			gm->tm_sec, prf->hdr.timestamp.tv_nsec / 1000);
+			gm->tm_sec, rf->timestamp.tv_nsec / 1000);
 	}
 
-	if (prf->hdr.wrap_pos != 0) {
-		fprintf(fp, "wrap position: %ld\n", prf->hdr.wrap_pos);
+	if (rf->wrap_pos != 0) {
+		fprintf(fp, "wrap position: %ld\n", rf->wrap_pos);
 	}
+
+	fprintf(fp, "ring name: %s\n", ((char *)prf) + rf->name_off);
+	fprintf(fp, "ring desc: %s\n", ((char *)prf) + rf->desc_off);
 
  out:
 	return rc;
@@ -128,7 +136,7 @@ static void print_trace_summary(int fd, FILE *fp,
 	}
 
 	strftime(buf, sizeof(buf), "%m-%d %H:%M:%S", gm);
-	fprintf(fp, "end time: %s\n", buf);
+	fprintf(fp, "end time  : %s\n", buf);
 }
 
 static size_t load_trace_page(int fd, uint64_t page_idx,
@@ -181,9 +189,11 @@ static bool_t trace_print_fn(uint64_t idx, FILE *fp,
 	return FALSE;
 }
 
-static void parse_trace_file(int fd, FILE *fp, struct rbtrace_fheader *rf,
-			     bool_t (*print_fn)(uint64_t idx, FILE *fp,
-						struct rbtrace_record *rr))
+static void
+parse_trace_file(int fd, FILE *fp,
+		 union padded_rbtrace_fheader *prf,
+		 bool_t (*parse_fn)(uint64_t idx, FILE *fp,
+				    struct rbtrace_record *rr))
 {
 	bool_t again = TRUE;
 	bool_t stop = FALSE;
@@ -191,10 +201,11 @@ static void parse_trace_file(int fd, FILE *fp, struct rbtrace_fheader *rf,
 	size_t page_size = 0;
 	uint64_t page_idx = 0;
 	char *page = NULL;
+	off_t off_in_pg = 0;
 	struct rbtrace_record *rr = NULL;
 	uint64_t cnt = 0;
 
-	page_size = sizeof(*rr) * rf->nr_records;
+	page_size = sizeof(*rr) * prf->hdr.nr_records;
 	page = malloc(page_size);
 	if (page == NULL) {
 		fprintf(stderr, "Failed to malloc %zu bytes for trace record!\n",
@@ -202,30 +213,45 @@ static void parse_trace_file(int fd, FILE *fp, struct rbtrace_fheader *rf,
 		goto out;
 	}
 
+	if (prf->hdr.wrap_pos > sizeof(*prf)) {
+		/* Unable to do binary search in wrap mode */
+		page_idx = (prf->hdr.wrap_pos - sizeof(*prf)) / page_size;
+		off_in_pg = (prf->hdr.wrap_pos - sizeof(*prf)) % page_size;
+	} else if (opts.start_time) {
+		/* TODO: do binary search in file */
+	}
+
 	do {
 		nbytes = load_trace_page(fd, page_idx, page, page_size);
 		if (nbytes <= 0) {
 			break;
-		} else if (nbytes < page_size) {
+		} else if (nbytes <= off_in_pg) {
+			fprintf(stderr, "Invalid page_idx(%ld) or off_in_pg(%ld)\n",
+				page_idx, off_in_pg);
+			goto out;
+		}else if (nbytes < page_size) {
 			again = FALSE;
 		}
 
-		rr = (struct rbtrace_record *)page;
+		rr = (struct rbtrace_record *)(page + off_in_pg);
+		nbytes -= off_in_pg;
 		while (nbytes >= sizeof(*rr)) {
+			/* Parse the trace record */
+			stop = parse_fn(cnt, fp, rr);
 			cnt++;
-			stop = print_fn(cnt, fp, rr);
 			if (stop) {
 				goto out;
 			}
-
 			rr++;
 			nbytes -= sizeof(*rr);
 		}
 
 		page_idx++;
+		off_in_pg = 0;
 	} while (again);
 
-	if (rf->wrap_pos == 0) {
+	if ((prf->hdr.wrap_pos == 0) ||
+	    (prf->hdr.wrap_pos == sizeof(*prf))) {
 		goto out;
 	}
 
@@ -245,8 +271,9 @@ int main(int argc, char *argv[])
 	int fd = -1;
 	union padded_rbtrace_fheader prf;
 	FILE *fp = NULL;
+	struct tm time;
 
-	while ((ch = getopt(argc, argv, "f:o:sh")) != -1) {
+	while ((ch = getopt(argc, argv, "f:o:s:e:Ih")) != -1) {
 		switch (ch) {
 		case 'f':
 			opts.file_path = optarg;
@@ -255,7 +282,29 @@ int main(int argc, char *argv[])
 			opts.out_path = optarg;
 			break;
 		case 's':
-			opts.only_summary = TRUE;
+			if (strptime(optarg, "%Y-%m-%d %T", &time) == NULL) {
+				fprintf(stderr, "Illegal time format!\n");
+				goto out;
+			}
+			opts.start_time = mktime(&time);
+			if (opts.start_time == -1) {
+				fprintf(stderr, "Parse time failed!\n");
+				goto out;
+			}
+			break;
+		case 'e':
+			if (strptime(optarg, "%Y-%m-%d %T", &time) == NULL) {
+				fprintf(stderr, "Illegal time format!\n");
+				goto out;
+			}
+			opts.end_time = mktime(&time);
+			if (opts.end_time == -1) {
+				fprintf(stderr, "Parse time failed!\n");
+				goto out;
+			}
+			break;
+		case 'I':
+			opts.only_show_info = TRUE;
 			break;
 		case 'h':
 		default:
@@ -293,12 +342,12 @@ int main(int argc, char *argv[])
 		goto out;
 	}
 
-	if (opts.only_summary) {
+	if (opts.only_show_info) {
 		print_trace_summary(fd, fp, &prf);
 		goto out;
 	}
 
-	parse_trace_file(fd, fp, &prf.hdr, trace_print_fn);
+	parse_trace_file(fd, fp, &prf, trace_print_fn);
 
  out:
 	if (fd != -1) {
@@ -312,6 +361,6 @@ static void usage(void)
 	printf("Usage: ./prbt <options>\n"
 	       "       [-f <trace-file>]  Specify trace file path\n"
 	       "       [-o <output-file>] Specify output file path\n"
-	       "       [-s]               Only show trace file summary\n"
+	       "       [-I]               Only show trace file info\n"
 	       "       [-h]               Display this help message\n");
 }

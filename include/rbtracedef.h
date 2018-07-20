@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef TRUE
 #define TRUE	1
 #endif
@@ -55,5 +59,9 @@ union padded_rbtrace_fheader {
 	struct rbtrace_fheader hdr;
 	char pad[RBTRACE_FHEADER_SIZE];
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif	/* __RBTRACEDEF_H__ */
