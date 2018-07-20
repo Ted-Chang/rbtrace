@@ -20,17 +20,16 @@
 struct rbtrace_info {
 	char ri_file_path[RBTRACE_MAX_PATH];// trace file path
 	size_t ri_data_size;	// number of bytes in a buffer write
-	uint64_t ri_seek;	// offset to seek to before write
-	uint64_t ri_flags;	// attribute flags for this ring
-	uint64_t ri_tflags;	// traffic flags for this ring
 	uint32_t ri_size;	// number of records in single ring
 	rbtrace_ring_t ri_ring;	// ring ID
-	volatile size_t ri_cir_off;// offset to active ring buffer
-	volatile size_t ri_alt_off;// offset to inactive ring buffer
+	uint64_t ri_seek;	// offset to seek to before write
+	volatile uint64_t ri_flags;// attribute flags for this ring
+	volatile uint64_t ri_tflags;// traffic flags for this ring
+	volatile int ri_cir_off;// offset in trace records to active ring buffer
+	volatile int ri_alt_off;// offset in trace records to inactive ring buffer
 	volatile int ri_slot;	// current position in ring
 	volatile int ri_flush;	// flushing
 	volatile int ri_lost;	// number of records lost
-	volatile int ri_refcnt;	// reference count
 };
 
 /* Flags for ri_flags in rbtrace_info */

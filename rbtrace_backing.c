@@ -13,13 +13,11 @@
 
 STATIC_ASSERT(sizeof(struct rbtrace_fheader) < RBTRACE_FHEADER_SIZE);
 
-#define ONE_MB				(1024 * 1024)
-
 #define RBTRACE_THREAD_NAME		"rbtrace-flush"
 #define RBTRACE_THREAD_WAIT_SECS	(5)
 #define RBTRACE_FLUSH_WAIT_USECS	(5000)
 
-#define RBTRACE_DFT_FILE_SIZE		(10)
+#define RBTRACE_DFT_FILE_SIZE		(2048ULL*1024ULL*1024ULL)
 
 struct rbtrace_thread_data {
 	pthread_t thread;
@@ -87,9 +85,9 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 		dprintf("ring:%d open %s failed, error:%d\n",
 			ring, path, errno);
 		goto out;
-	} else {
-		dprintf("ring:%d file %s open\n", ring, path);
 	}
+
+	dprintf("ring:%d file %s open\n", ring, path);
 
 	/* Format the trace header */
 	rbtrace_format_header(ring);
@@ -100,16 +98,19 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 	    sizeof(rbtrace_hdrs[ring])) {
 		dprintf("ring:%d pwrite failed, error:%d\n",
 			ring, errno);
+		goto out;
 	}
 
 	ri->ri_seek = sizeof(rbtrace_hdrs[ring]);
+	/* Set flag to indicate file is open for business */
+	ri->ri_flags |= RBTRACE_DO_DISK;
 
+	/* Clear open flag since we have open it */
 	ri->ri_flags &= ~RBTRACE_DO_OPEN;
 	return;
 
  out:
 	ri->ri_flags &= ~RBTRACE_DO_OPEN;
-	ri->ri_flags &= ~RBTRACE_DO_DISK;
 	ri->ri_seek = 0;
 	if (rbtrace_fds[ring] != -1) {
 		close(rbtrace_fds[ring]);
@@ -136,8 +137,8 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	ri = &rbtrace_globals.ri_ptr[ring];
 	prf = &rbtrace_hdrs[ring];
 
+	/* Update file header if this ring is wrapped */
 	if ((prf->hdr.wrap_pos != 0) && (ri->ri_flags & RBTRACE_DO_WRAP)) {
-		/* Update file header if this ring is wrapped */
 		ri->ri_seek = prf->hdr.wrap_pos;
 		prf->hdr.wrap_pos +=
 			ri->ri_size * sizeof(struct rbtrace_record);
@@ -153,7 +154,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 		buf_size = (ri->ri_slot + 1) *
 			sizeof(struct rbtrace_record);
 	} else {
-		buf = (char *)rbtrace_globals.rr_base + ri->ri_alt_off;
+		buf = (char *)(rbtrace_globals.rr_base + ri->ri_alt_off);
 		buf_size = ri->ri_data_size;
 	}
 	off = ri->ri_seek;
@@ -171,10 +172,12 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	ri->ri_seek += buf_size;
 
 	/* Close or wrap the file if buffer limit is reached */
-	if (ri->ri_seek > ((*rbtrace_globals.fsize_ptr) * ONE_MB)) {
+	if (ri->ri_seek > *rbtrace_globals.fsize_ptr) {
 		if (ri->ri_flags & RBTRACE_DO_CLOSE) {
+			/* Flush will be done in thread_fn */
 			dprintf("ring:%d user specified close.\n", ring);
 		} else if (ri->ri_flags & RBTRACE_DO_WRAP) {
+			/* Update trace file header */
 			prf->hdr.wrap_pos = sizeof(*prf);
 		} else if (ri->ri_flags & RBTRACE_DO_ZAP) {
 			/* Close current and open a new trace file */
@@ -183,12 +186,10 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 			rbtrace_file_nrs[ring]++;
 			rbtrace_write_header(ring);
 		} else {
+			/* Close file and stop tracing */
 			close(rbtrace_fds[ring]);
 			rbtrace_fds[ring] = -1;
-			/* Clear traffic flags, otherwise ringwrap will
-			 * keep rolling for collecting traces
-			 */
-			ri->ri_tflags = 0;
+			ri->ri_flags &= ~RBTRACE_DO_DISK;
 		}
 	}
 
@@ -224,14 +225,11 @@ static void *rbtrace_thread_fn(void *arg)
 
 		ring = *(rbtrace_globals.ring_ptr);
 		if (ring >= RBTRACE_RING_MAX) {
+			dprintf("ring:%d invalid ring number!\n", ring);
 			continue;
 		}
 
 		ri = &rbtrace_globals.ri_ptr[ring];
-		if (!(ri->ri_flags & (RBTRACE_DO_DISK|RBTRACE_DO_CLOSE))) {
-			/* Nothing to do */
-			continue;
-		}
 
 		/* We are about to closing the trace file? */
 		if (ri->ri_flags & RBTRACE_DO_CLOSE) {
@@ -248,11 +246,14 @@ static void *rbtrace_thread_fn(void *arg)
 
 			/* Close file descriptor */
 			if (rbtrace_fds[ring] != -1) {
+				//fsync(rbtrace_fds[ring]);
 				close(rbtrace_fds[ring]);
 				rbtrace_fds[ring] = -1;
 				rbtrace_file_nrs[ring] = 0;
 				dprintf("ring:%d file %s closed!\n",
 					ring, ri->ri_file_path);
+				memset(ri->ri_file_path, 0,
+				       sizeof(ri->ri_file_path));
 			}
 
 			ri->ri_flags &= ~RBTRACE_DO_CLOSE;
@@ -262,8 +263,8 @@ static void *rbtrace_thread_fn(void *arg)
 		else if (ri->ri_flags & RBTRACE_DO_OPEN) {
 			rbtrace_write_header(ring);
 		}
-		/* Normal write case */
-		else {
+		/* Normal write or flush */
+		else if (ri->ri_flags & RBTRACE_DO_DISK) {
 			if (ri->ri_flush) {
 				rbtrace_write_data(ring, FALSE);
 			}
@@ -406,7 +407,8 @@ static int rbtrace_ctrl_open(struct rbtrace_info *ri, void *argp)
 	int rc = 0;
 	char *path = NULL;
 
-	if ((ri->ri_flags & RBTRACE_DO_OPEN) || (argp == NULL)) {
+	if ((ri->ri_flags & (RBTRACE_DO_OPEN|RBTRACE_DO_DISK)) ||
+	    (argp == NULL)) {
 		rc = -1;
 		goto out;
 	}
@@ -423,7 +425,7 @@ static int rbtrace_ctrl_open(struct rbtrace_info *ri, void *argp)
 	ri->ri_flush = 0;
 	ri->ri_lost = 0;
 
-	ri->ri_flags |= (RBTRACE_DO_OPEN|RBTRACE_DO_DISK);
+	ri->ri_flags |= RBTRACE_DO_OPEN;
 
 	rbtrace_signal_thread(ri);
 
@@ -433,87 +435,66 @@ static int rbtrace_ctrl_open(struct rbtrace_info *ri, void *argp)
 
 static int rbtrace_ctrl_close(struct rbtrace_info *ri, void *argp)
 {
-	int rc = 0;
+	int rc = -1;
 
-	if (rbtrace_fds[ri->ri_ring] == -1) {
-		rc = -1;
-		goto out;
+	if (ri->ri_flags & RBTRACE_DO_DISK) {
+		/* Stop any writing to disk */
+		ri->ri_flags &= ~RBTRACE_DO_DISK;
+		ri->ri_flags |= (RBTRACE_DO_FLUSH|RBTRACE_DO_CLOSE);
+
+		rbtrace_signal_thread(ri);
+		rc = 0;
 	}
 
-	/* Stop any writing to disk */
-	ri->ri_flags &= ~RBTRACE_DO_DISK;
-	ri->ri_flags |= (RBTRACE_DO_FLUSH|RBTRACE_DO_CLOSE);
-
-	rbtrace_signal_thread(ri);
-
- out:
 	return rc;
 }
 
 static int rbtrace_ctrl_size(struct rbtrace_info *ri, void *argp)
 {
-	int rc = 0;
-	uint64_t size = 0;
+	int rc = -1;
 
-	if (argp == NULL) {
-		rc = -1;
-		goto out;
+	if (argp != NULL) {
+		uint64_t size = *((uint64_t *)argp);
+		if (size > ri->ri_data_size) {
+			(*rbtrace_globals.fsize_ptr) = size;
+			rc = 0;
+		}
 	}
 
-	size = *((uint64_t *)argp);
-
-	if (size < 10) {
-		rc = -1;
-		goto out;
-	}
-
-	(*rbtrace_globals.fsize_ptr) = size;
-
- out:
 	return rc;
 }
 
 static int rbtrace_ctrl_wrap(struct rbtrace_info *ri, void *argp)
 {
-	int rc = 0;
-	bool_t enable = FALSE;
+	int rc = -1;
 
-	if ((ri->ri_flags & RBTRACE_DO_ZAP) ||
-	    (argp == NULL)) {
-		rc = -1;
-		goto out;
+	if (!(ri->ri_flags & RBTRACE_DO_ZAP) &&	(argp != NULL)) {
+		bool_t enable = *((bool_t *)argp);
+		if (enable) {
+			ri->ri_flags |= RBTRACE_DO_WRAP;
+		} else {
+			ri->ri_flags &= ~RBTRACE_DO_WRAP;
+		}
+		rc = 0;
 	}
 
-	enable = *((bool_t *)argp);
-	if (enable) {
-		ri->ri_flags |= RBTRACE_DO_WRAP;
-	} else {
-		ri->ri_flags &= ~RBTRACE_DO_WRAP;
-	}
-
- out:
 	return rc;
 }
 
 static int rbtrace_ctrl_zap(struct rbtrace_info *ri, void *argp)
 {
-	int rc = 0;
-	bool_t enable = FALSE;
+	int rc = -1;
 
-	if ((ri->ri_flags & RBTRACE_DO_WRAP) ||
-	    (argp == NULL)) {
-		rc = -1;
-		goto out;
+	if (!(ri->ri_flags & RBTRACE_DO_WRAP) && (argp != NULL)) {
+		bool_t enable = *((bool_t *)argp);
+		if (enable) {
+			ri->ri_flags |= RBTRACE_DO_ZAP;
+		} else {
+			ri->ri_flags &= ~RBTRACE_DO_ZAP;
+		}
+		rc = 0;
 	}
 
-	enable = *((bool_t *)argp);
-	if (enable) {
-		ri->ri_flags |= RBTRACE_DO_ZAP;
-	} else {
-		ri->ri_flags &= ~RBTRACE_DO_ZAP;
-	}
-
- out:
 	return rc;
 }
 

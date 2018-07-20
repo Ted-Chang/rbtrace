@@ -23,8 +23,6 @@
 
 #define RBTRACE_IO_RING_SIZE	(64*1024)
 
-#define RBTRACE_DEFAULT_FSIZE	(2048)
-
 struct rbtrace_config rbtrace_cfgs[] = {
 	{
 		RBTRACE_RING_IO,
@@ -51,10 +49,9 @@ struct rbtrace_global_data rbtrace_globals = {
 
 void rbtrace_signal_thread(struct rbtrace_info *ri)
 {
-	if (ri->ri_flags & (RBTRACE_DO_CLOSE | RBTRACE_DO_DISK)) {
-		if (sem_post(rbtrace_globals.sem_ptr) == -1) {
-			DBG_ASSERT(0);
-		}
+	(*rbtrace_globals.ring_ptr) = ri->ri_ring;
+	if (sem_post(rbtrace_globals.sem_ptr) == -1) {
+		DBG_ASSERT(0);
 	}
 }
 
@@ -67,12 +64,19 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 	if (slot == ri->ri_size) {
 		/* swap ring buffer */
 		if (__sync_add_and_fetch(&ri->ri_flush, 1) == 1) {
+			/* No buffer flush in progress, swap cir_off & alt_off,
+			 * guarded by ri_flush and CMPXCHG
+			 */
 			size_t temp;
 			temp = ri->ri_cir_off;
 			ri->ri_cir_off = ri->ri_alt_off;
 			ri->ri_alt_off = temp;
 
 			__sync_lock_test_and_set(&ri->ri_slot, -1);
+
+			/* Prior buffer flush (if any) has done,
+			 * reset lost statistics
+			 */
 			lost = __sync_lock_test_and_set(&ri->ri_lost, 0);
 			if (lost) {
 				rbtrace(RBTRACE_RING_IO, RBT_LOST, lost, 0, 0, 0);
@@ -81,7 +85,15 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 			}
 			rbtrace_signal_thread(ri);
 		} else {
+			/* The last buffer flush is still in progress,
+			 * the records in current buffer will be
+			 * discarded
+			 */
 			__sync_lock_test_and_set(&ri->ri_slot, -1);
+
+			/* Wake if missed or still processing prior
+			 * flush to disk
+			 */
 			rbtrace_signal_thread(ri);
 		}
 	} else {

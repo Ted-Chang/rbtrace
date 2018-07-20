@@ -144,6 +144,7 @@ int main(int argc, char *argv[])
 	}
 	if (do_size) {
 		op = RBTRACE_OP_SIZE;
+		opts.size *= (1024*1024); // Transfer to bytes
 		rc = rbtrace_ctrl(opts.ring, op, &opts.size);
 		if (rc != 0) {
 			goto out;
@@ -184,6 +185,7 @@ static void usage(void)
 	       "       [-r <ring-id>]   Specify trace ring, io by default\n"
 	       "       [-o <tracefile>] Open trace file\n"
 	       "       [-c]             Flush and close trace file\n"
+	       "       [-s <size-MB>]   Specify trace file size in MB\n"
 	       "       [-w on|off]      Enable/disable wrap, exclusive with zap\n"
 	       "       [-z on|off]      Enable/disable zap, exclusive with wrap\n"
 	       "       [-S <trace-id>]  Set trace ID to be enabled\n"
