@@ -67,7 +67,7 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 	struct rbtrace_info *ri;
 	char path[RBTRACE_MAX_PATH];
 
-	ri = &rbtrace_globals.ri_ptr[ring];
+	ri = &rbt_globals.ri_ptr[ring];
 
 	if (rbt_fds[ring] != -1) {
 		dprintf("ring:%d file already open!\n", ring);
@@ -136,14 +136,14 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 		return;
 	}
 
-	ri = &rbtrace_globals.ri_ptr[ring];
+	ri = &rbt_globals.ri_ptr[ring];
 	prf = &rbt_hdrs[ring];
 
 	if (do_flush) {
-		buf = (char *)(rbtrace_globals.rr_base + ri->ri_cir_off);
+		buf = (char *)(rbt_globals.rr_base + ri->ri_cir_off);
 		buf_size = (ri->ri_slot + 1) * sizeof(struct rbtrace_record);
 	} else {
-		buf = (char *)(rbtrace_globals.rr_base + ri->ri_alt_off);
+		buf = (char *)(rbt_globals.rr_base + ri->ri_alt_off);
 		buf_size = ri->ri_data_size;
 	}
 
@@ -168,7 +168,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	ri->ri_seek += buf_size;
 
 	/* Close or wrap the file if buffer limit reached */
-	if (ri->ri_seek >= *rbtrace_globals.fsize_ptr) {
+	if (ri->ri_seek >= *rbt_globals.fsize_ptr) {
 		if (ri->ri_flags & RBTRACE_DO_CLOSE) {
 			/* Flush will be done in thread_fn */
 			dprintf("ring:%d user specified close.\n", ring);
@@ -223,18 +223,18 @@ static void *rbtrace_thread_fn(void *arg)
 	while (!rbt_thread.terminate) {
 		clock_gettime(CLOCK_REALTIME, &wait_ts);
 		wait_ts.tv_sec += RBTRACE_THREAD_WAIT_SECS;
-		rc = sem_timedwait(rbtrace_globals.sem_ptr, &wait_ts);
+		rc = sem_timedwait(rbt_globals.sem_ptr, &wait_ts);
 		if ((rc == -1) && (errno != ETIMEDOUT)) {
 			break;
 		}
 
-		ring = *(rbtrace_globals.ring_ptr);
+		ring = *(rbt_globals.ring_ptr);
 		if (ring >= RBTRACE_RING_MAX) {
 			dprintf("ring:%d invalid ring number!\n", ring);
 			continue;
 		}
 
-		ri = &rbtrace_globals.ri_ptr[ring];
+		ri = &rbt_globals.ri_ptr[ring];
 
 		/* We are about to closing the trace file? */
 		if (ri->ri_flags & RBTRACE_DO_CLOSE) {
@@ -345,12 +345,12 @@ int rbtrace_daemon_init(void)
 
 	/* Initialize global pointers */
 	rbtrace_globals_init(shm_fd, shm_base, shm_size, sem_ptr);
-	(*rbtrace_globals.fsize_ptr) = RBTRACE_DFT_FILE_SIZE;
+	(*rbt_globals.fsize_ptr) = RBTRACE_DFT_FILE_SIZE;
 
 	/* Initialize each trace info */
 	for (i = RBTRACE_RING_IO; i < RBTRACE_RING_MAX; i++) {
 		off += rbtrace_init_trace_info(&rbt_cfgs[i],
-					       &rbtrace_globals.ri_ptr[i],
+					       &rbt_globals.ri_ptr[i],
 					       off);
 		rbt_fds[i] = -1;
 		rbt_file_nrs[i] = 0;
@@ -390,7 +390,7 @@ void rbtrace_daemon_exit(void)
 	/* Terminate rbtrace thread */
 	if (rbt_thread.inited) {
 		rbt_thread.terminate = TRUE;
-		sem_post(rbtrace_globals.sem_ptr);
+		sem_post(rbt_globals.sem_ptr);
 		pthread_join(rbt_thread.thread, NULL);
 		rbt_thread.inited = FALSE;
 	}
@@ -461,7 +461,7 @@ static int rbtrace_ctrl_size(struct rbtrace_info *ri, void *argp)
 	if (argp != NULL) {
 		uint64_t size = *((uint64_t *)argp);
 		if (size > ri->ri_data_size) {
-			(*rbtrace_globals.fsize_ptr) = size;
+			(*rbt_globals.fsize_ptr) = size;
 			rc = 0;
 		}
 	}
@@ -556,7 +556,7 @@ int rbtrace_ctrl(rbtrace_ring_t ring, rbtrace_op_t op,
 		goto out;
 	}
 
-	ri = &rbtrace_globals.ri_ptr[ring];
+	ri = &rbt_globals.ri_ptr[ring];
 	if (rbt_ops[op]) {
 		rc = rbt_ops[op](ri, argp);
 	}

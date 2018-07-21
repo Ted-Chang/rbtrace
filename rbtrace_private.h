@@ -60,7 +60,7 @@ struct rbtrace_global_data {
 	struct rbtrace_record *rr_base;
 };
 
-extern struct rbtrace_global_data rbtrace_globals;
+extern struct rbtrace_global_data rbt_globals;
 
 typedef enum rbtrace_op {
 	RBTRACE_OP_OPEN = 0,

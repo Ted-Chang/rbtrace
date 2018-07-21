@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 #include <sys/wait.h>
 #include <pthread.h>
 #include <assert.h>
@@ -13,6 +15,8 @@
 #ifndef gettid
 #define gettid()	syscall(__NR_gettid)
 #endif
+
+#define SHM_NAME	"rbtbench"
 
 struct bench_option {
 	int nr_processes;
@@ -27,17 +31,17 @@ struct bench_option {
 struct bench_context {
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
-	pid_t pid;
+	int ready_threads;
 	int x;
 };
 
 static void do_bench(struct bench_context *ctx)
 {
 	int x;
-	ctx->pid = getpid();
+	pid_t pid = getpid();
 	while ((x = __sync_add_and_fetch(&ctx->x, 1)) < opts.nr_traces) {
 		rbtrace(RBTRACE_RING_IO, RBT_TRAFFIC_TEST,
-			ctx->pid, x, x, x);
+			pid, x, x, x);
 	}
 }
 
@@ -49,6 +53,8 @@ static void *benchmark_thread(void *arg)
 	struct bench_context *ctx;
 
 	ctx = (struct bench_context *)arg;
+
+	printf("thread:%ld created!\n", gettid());
 	
 	/* Mutex unlocked if condition signaled */
 	rc = pthread_mutex_lock(&ctx->mutex);
@@ -56,6 +62,8 @@ static void *benchmark_thread(void *arg)
 		fprintf(stderr, "Failed to lock mutex, error:%d\n", rc);
 		goto out;
 	}
+
+	__sync_add_and_fetch(&ctx->ready_threads, 1);
 
 	rc = pthread_cond_wait(&ctx->cond, &ctx->mutex);
 	if (rc != 0) {
@@ -83,12 +91,13 @@ int main(int argc, char *argv[])
 {
 	int rc = 0;
 	int ch = 0;
+	int shmfd = -1;
 	bool_t rbtrace_inited = FALSE;
 	bool_t is_parent = TRUE;
 	pthread_mutexattr_t mutex_attr;
 	pthread_condattr_t cond_attr;
 	pthread_t *threads = NULL;
-	struct bench_context ctx;
+	struct bench_context *ctx = NULL;
 	pid_t pid = -1;
 	int i;
 
@@ -122,24 +131,29 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	/* Initialize cond var for inter process communicating */
-	memset(&ctx, 0, sizeof(ctx));
-	pthread_mutexattr_init(&mutex_attr);
-	pthread_mutexattr_setpshared(&mutex_attr, PTHREAD_PROCESS_SHARED);
-	pthread_mutex_init(&ctx.mutex, &mutex_attr);
-	pthread_mutexattr_destroy(&mutex_attr);
-	pthread_condattr_init(&cond_attr);
-	pthread_condattr_setpshared(&cond_attr, PTHREAD_PROCESS_SHARED);
-	pthread_cond_init(&ctx.cond, &cond_attr);
-	pthread_condattr_destroy(&cond_attr);
-
-	/* Initialize rbtrace */
-	rc = rbtrace_init();
-	if (rc != 0) {
-		fprintf(stderr, "rbtrace init failed, error:%d!\n", rc);
+	/* Create shared memory */
+	shmfd = shm_open(SHM_NAME, O_RDWR|O_CREAT|O_EXCL, 0666);
+	if (shmfd == -1) {
 		goto out;
 	}
-	rbtrace_inited = TRUE;
+	rc = ftruncate(shmfd, sizeof(*ctx));
+	if (rc == -1) {
+		goto out;
+	}
+	ctx = mmap(NULL, sizeof(*ctx), PROT_READ|PROT_WRITE,
+		   MAP_SHARED, shmfd, 0);
+	if (ctx == MAP_FAILED) {
+		goto out;
+	}
+
+	/* Initialize cond var for inter process communicating */
+	memset(ctx, 0, sizeof(*ctx));
+	pthread_mutexattr_init(&mutex_attr);
+	pthread_mutexattr_setpshared(&mutex_attr, PTHREAD_PROCESS_SHARED);
+	pthread_mutex_init(&ctx->mutex, &mutex_attr);
+	pthread_condattr_init(&cond_attr);
+	pthread_condattr_setpshared(&cond_attr, PTHREAD_PROCESS_SHARED);
+	pthread_cond_init(&ctx->cond, &cond_attr);
 
 	/* Create benchmark processes */
 	for (i = 0; i < (opts.nr_processes - 1); i++) {
@@ -153,6 +167,27 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	/* Map ctx into child's address space */
+	if (!is_parent) {
+		shmfd = shm_open(SHM_NAME, O_RDWR, 0666);
+		if (shmfd == -1) {
+			goto out;
+		}
+		ctx = mmap(NULL, sizeof(*ctx), PROT_READ|PROT_WRITE,
+			   MAP_SHARED, shmfd, 0);
+		if (ctx == MAP_FAILED) {
+			goto out;
+		}
+	}
+
+	/* No matter you are parent or child you need to init rbtrace */
+	rc = rbtrace_init();
+	if (rc != 0) {
+		fprintf(stderr, "rbtrace init failed, error:%d!\n", rc);
+		goto out;
+	}
+	rbtrace_inited = TRUE;
+
 	/* Create benchmark threads */
 	if (opts.nr_threads > 1) {
 		threads = malloc(sizeof(*threads) * opts.nr_threads);
@@ -160,38 +195,49 @@ int main(int argc, char *argv[])
 		for (i = 0; i < (opts.nr_threads - 1); i++) {
 			rc = pthread_create(&threads[i], NULL,
 					    benchmark_thread,
-					    &ctx);
+					    ctx);
 			assert(rc == 0);
 		}
 	}
 
 	if (is_parent) {
+		rc = pthread_mutex_lock(&ctx->mutex);
+		if (rc != 0) {
+			goto out;
+		}
+
 		/* Wait for all threads to be ready */
-		sleep(3);
+		while (ctx->ready_threads <
+		       (opts.nr_processes * opts.nr_threads - 1)) {
+			rc = pthread_mutex_unlock(&ctx->mutex);
+			sleep(1);
+			rc = pthread_mutex_lock(&ctx->mutex);
+		}
+
+		printf("Ready, GO!\n");
 
 		/* Broadcast starting signal. Ready, GO! */
-		rc = pthread_mutex_lock(&ctx.mutex);
+		rc = pthread_cond_broadcast(&ctx->cond);
 		if (rc != 0) {
 			goto out;
 		}
-		rc = pthread_cond_broadcast(&ctx.cond);
-		if (rc != 0) {
-			goto out;
-		}
-		rc = pthread_mutex_unlock(&ctx.mutex);
+		rc = pthread_mutex_unlock(&ctx->mutex);
 		if (rc != 0) {
 			goto out;
 		}
 	} else {
-		rc = pthread_mutex_lock(&ctx.mutex);
+		rc = pthread_mutex_lock(&ctx->mutex);
 		if (rc != 0) {
 			goto out;
 		}
-		rc = pthread_cond_wait(&ctx.cond, &ctx.mutex);
+
+		__sync_add_and_fetch(&ctx->ready_threads, 1);
+
+		rc = pthread_cond_wait(&ctx->cond, &ctx->mutex);
 		if (rc != 0) {
 			goto out;
 		}
-		rc = pthread_mutex_lock(&ctx.mutex);
+		rc = pthread_mutex_unlock(&ctx->mutex);
 		if (rc != 0) {
 			goto out;
 		}
@@ -199,7 +245,7 @@ int main(int argc, char *argv[])
 
 	printf("thread:%ld start benchmarking...\n", gettid());
 
-	do_bench(&ctx);
+	do_bench(ctx);
 
 	printf("thread:%ld benmarking done.\n", gettid());
 
@@ -210,7 +256,23 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if (is_parent) {
+		while ((pid = wait(NULL)) != -1) {
+			printf("process %d exited!\n", pid);
+		}
+		printf("benchmark done!\n");
+	}
+
  out:
+	if (shmfd != -1) {
+		if (ctx != NULL) {
+			munmap(ctx, sizeof(*ctx));
+		}
+		close(shmfd);
+		if (is_parent) {
+			shm_unlink(SHM_NAME);
+		}
+	}
 	if (threads) {
 		free(threads);
 	}

@@ -202,6 +202,7 @@ parse_trace_file(int fd, FILE *fp,
 	uint64_t page_idx = 0;
 	char *page = NULL;
 	off_t off_in_pg = 0;
+	off_t off_in_file = 0;
 	struct rbtrace_record *rr = NULL;
 	uint64_t cnt = 0;
 
@@ -229,7 +230,7 @@ parse_trace_file(int fd, FILE *fp,
 			fprintf(stderr, "Invalid page_idx(%ld) or off_in_pg(%ld)\n",
 				page_idx, off_in_pg);
 			goto out;
-		}else if (nbytes < page_size) {
+		} else if (nbytes < page_size) {
 			again = FALSE;
 		}
 
@@ -250,13 +251,51 @@ parse_trace_file(int fd, FILE *fp,
 		off_in_pg = 0;
 	} while (again);
 
+	/* We're done if file is not wrapped or wrapped at the head */
 	if ((prf->hdr.wrap_pos == 0) ||
 	    (prf->hdr.wrap_pos == sizeof(*prf))) {
 		goto out;
 	}
 
 	/* The file is wrapped, handle the rest of the records */
+	again = TRUE;
 	page_idx = 0;
+
+	do {
+		nbytes = load_trace_page(fd, page_idx, page, page_size);
+		if (nbytes <= 0) {
+			break;
+		} else if (nbytes <= off_in_pg) {
+			fprintf(stderr, "invalid off_in_pg(%ld)\n",
+				off_in_pg);
+			goto out;
+		} else if (nbytes < page_size) {
+			again = FALSE;
+		}
+
+		rr = (struct rbtrace_record *)(page + off_in_pg);
+		nbytes -= off_in_pg;
+		while (nbytes >= sizeof(*rr)) {
+			off_in_file = sizeof(*prf) +
+				page_idx * page_size +
+				off_in_pg;
+			if (off_in_file >= prf->hdr.wrap_pos) {
+				/* Done! */
+				goto out;
+			}
+			stop = parse_fn(cnt, fp, rr);
+			cnt++;
+			if (stop) {
+				goto out;
+			}
+			rr++;
+			off_in_pg += sizeof(*rr);
+			nbytes -= sizeof(*rr);
+		}
+
+		page_idx++;
+		off_in_pg = 0;
+	} while (again);
 
  out:
 	if (page) {

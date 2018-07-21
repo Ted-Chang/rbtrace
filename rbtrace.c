@@ -35,7 +35,7 @@ struct rbtrace_config rbt_cfgs[] = {
 
 STATIC_ASSERT((sizeof(rbt_cfgs)/sizeof(rbt_cfgs[0])) == RBTRACE_RING_MAX);
 
-struct rbtrace_global_data rbtrace_globals = {
+struct rbtrace_global_data rbt_globals = {
 	.inited = FALSE,
 	.shm_fd = -1,
 	.shm_size = 0,
@@ -49,8 +49,8 @@ struct rbtrace_global_data rbtrace_globals = {
 
 void rbtrace_signal_thread(struct rbtrace_info *ri)
 {
-	(*rbtrace_globals.ring_ptr) = ri->ri_ring;
-	if (sem_post(rbtrace_globals.sem_ptr) == -1) {
+	(*rbt_globals.ring_ptr) = ri->ri_ring;
+	if (sem_post(rbt_globals.sem_ptr) == -1) {
 		dprintf("ring:%d sem_post failed, error:%d\n",
 			ri->ri_ring, errno);
 	}
@@ -105,7 +105,7 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 		slot = __sync_add_and_fetch(&ri->ri_slot, 1);
 		if (slot < ri->ri_size) {
 			rr = ((struct rbtrace_record *)
-			      (rbtrace_globals.rr_base + ri->ri_cir_off)) + slot;
+			      (rbt_globals.rr_base + ri->ri_cir_off)) + slot;
 			clock_gettime(CLOCK_REALTIME, &rr->rr_timestamp);
 			rr->rr_cpuid = (uint16_t)sched_getcpu();
 			rr->rr_thread = gettid();
@@ -121,7 +121,7 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 	slot = __sync_add_and_fetch(&ri->ri_slot, 1);
 	if (slot < ri->ri_size) {
 		rr = ((struct rbtrace_record *)
-		      (rbtrace_globals.rr_base + ri->ri_cir_off)) + slot;
+		      (rbt_globals.rr_base + ri->ri_cir_off)) + slot;
 		clock_gettime(CLOCK_REALTIME, &rr->rr_timestamp);
 		rr->rr_cpuid = (uint16_t)sched_getcpu();
 		rr->rr_thread = gettid();
@@ -143,7 +143,7 @@ ringwrap(struct rbtrace_info *ri)
 	slot = __sync_add_and_fetch(&ri->ri_slot, 1);
 	if (slot < ri->ri_size) {
 		rr = ((struct rbtrace_record *)
-		      (rbtrace_globals.rr_base + ri->ri_cir_off)) + slot;
+		      (rbt_globals.rr_base + ri->ri_cir_off)) + slot;
 		clock_gettime(CLOCK_REALTIME, &rr->rr_timestamp);
 		rr->rr_cpuid = (uint16_t)sched_getcpu();
 		rr->rr_thread = gettid();
@@ -161,11 +161,11 @@ int rbtrace(rbtrace_ring_t ring, uint16_t traceid, uint64_t a0,
 	struct rbtrace_record *rr;
 
 	if ((ring >= RBTRACE_RING_MAX) ||
-	    (NULL == rbtrace_globals.ri_ptr)) {
+	    (NULL == rbt_globals.ri_ptr)) {
 		return -1;
 	}
 
-	ri = rbtrace_globals.ri_ptr + ring;
+	ri = rbt_globals.ri_ptr + ring;
 	rr = ringwrap(ri);
 	if (rr == NULL) {
 		rc = -1;
@@ -184,11 +184,11 @@ inline int rbtrace_traffic_enabled(rbtrace_ring_t ring, uint16_t traceid)
 {
 	if ((ring >= RBTRACE_RING_MAX) ||
 	    (traceid >= RBT_LAST) ||
-	    (rbtrace_globals.ri_ptr == NULL)) {
+	    (rbt_globals.ri_ptr == NULL)) {
 		return FALSE;
 	}
 
-	return rbtrace_globals.ri_ptr[ring].ri_tflags & (1 << traceid);
+	return rbt_globals.ri_ptr[ring].ri_tflags & (1 << traceid);
 }
 
 static size_t rbtrace_calc_ring_size(struct rbtrace_config *cfg)
@@ -205,14 +205,14 @@ size_t rbtrace_calc_shm_size(void)
 	int i;
 	size_t size = 0;
 
-	size += sizeof(*rbtrace_globals.fsize_ptr);
-	size += sizeof(*rbtrace_globals.ring_ptr);
+	size += sizeof(*rbt_globals.fsize_ptr);
+	size += sizeof(*rbt_globals.ring_ptr);
 
 	for (i = RBTRACE_RING_IO; i < RBTRACE_RING_MAX; i++) {
 		size += rbtrace_calc_ring_size(&rbt_cfgs[i]);
 	}
 
-	size += (RBTRACE_RING_MAX * sizeof(*rbtrace_globals.ri_ptr));
+	size += (RBTRACE_RING_MAX * sizeof(*rbt_globals.ri_ptr));
 
 	return size;
 }
@@ -223,53 +223,53 @@ void rbtrace_globals_init(int shm_fd, char *shm_base,
 {
 	size_t offset = 0;
 
-	rbtrace_globals.shm_fd = shm_fd;
-	rbtrace_globals.sem_ptr = sem_ptr;
-	rbtrace_globals.shm_base = shm_base;
-	rbtrace_globals.shm_size = shm_size;
+	rbt_globals.shm_fd = shm_fd;
+	rbt_globals.sem_ptr = sem_ptr;
+	rbt_globals.shm_base = shm_base;
+	rbt_globals.shm_size = shm_size;
 
-	rbtrace_globals.fsize_ptr = (uint64_t *)(shm_base + offset);
+	rbt_globals.fsize_ptr = (uint64_t *)(shm_base + offset);
 	offset += sizeof(uint64_t);
-	rbtrace_globals.ring_ptr = (rbtrace_ring_t *)(shm_base + offset);
+	rbt_globals.ring_ptr = (rbtrace_ring_t *)(shm_base + offset);
 	offset += sizeof(rbtrace_ring_t);
-	rbtrace_globals.ri_ptr = (struct rbtrace_info *)(shm_base + offset);
+	rbt_globals.ri_ptr = (struct rbtrace_info *)(shm_base + offset);
 	offset += sizeof(struct rbtrace_info) * RBTRACE_RING_MAX;
-	rbtrace_globals.rr_base = (struct rbtrace_record *)(shm_base + offset);
+	rbt_globals.rr_base = (struct rbtrace_record *)(shm_base + offset);
 
-	rbtrace_globals.inited = TRUE;
+	rbt_globals.inited = TRUE;
 }
 
 void rbtrace_globals_cleanup(bool_t is_daemon)
 {
-	if ((rbtrace_globals.sem_ptr != SEM_FAILED) &&
-	    (rbtrace_globals.sem_ptr != NULL)) {
-		sem_close(rbtrace_globals.sem_ptr);
+	if ((rbt_globals.sem_ptr != SEM_FAILED) &&
+	    (rbt_globals.sem_ptr != NULL)) {
+		sem_close(rbt_globals.sem_ptr);
 		if (is_daemon) {
 			sem_unlink(RBTRACE_SEM_NAME);
 		}
 	}
 
-	if (rbtrace_globals.shm_fd != -1) {
-		if ((rbtrace_globals.shm_base != MAP_FAILED) &&
-		    (rbtrace_globals.shm_base != NULL)) {
+	if (rbt_globals.shm_fd != -1) {
+		if ((rbt_globals.shm_base != MAP_FAILED) &&
+		    (rbt_globals.shm_base != NULL)) {
 			if (is_daemon) {
-				munlock(rbtrace_globals.shm_base,
-					rbtrace_globals.shm_size);
+				munlock(rbt_globals.shm_base,
+					rbt_globals.shm_size);
 			}
-			munmap(rbtrace_globals.shm_base,
-			       rbtrace_globals.shm_size);
+			munmap(rbt_globals.shm_base,
+			       rbt_globals.shm_size);
 		}
 
-		close(rbtrace_globals.shm_fd);
+		close(rbt_globals.shm_fd);
 		if (is_daemon) {
 			shm_unlink(RBTRACE_SHM_NAME);
 		}
 	}
 
-	rbtrace_globals.sem_ptr = SEM_FAILED;
-	rbtrace_globals.shm_fd = -1;
-	rbtrace_globals.shm_base = MAP_FAILED;
-	rbtrace_globals.inited = FALSE;
+	rbt_globals.sem_ptr = SEM_FAILED;
+	rbt_globals.shm_fd = -1;
+	rbt_globals.shm_base = MAP_FAILED;
+	rbt_globals.inited = FALSE;
 }
 
 void rbtrace_exit(void)
@@ -285,7 +285,7 @@ int rbtrace_init(void)
 	char *shm_base = NULL;
 	sem_t *sem_ptr = SEM_FAILED;
 
-	if (rbtrace_globals.inited) {
+	if (rbt_globals.inited) {
 		rc = -1;
 		goto out;
 	}
