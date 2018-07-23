@@ -513,7 +513,7 @@ static int rbtrace_ctrl_tflags(struct rbtrace_info *ri, void *argp)
 		if (tflags_arg->set) {
 			ri->ri_tflags |= tflags_arg->tflags;
 		} else {
-			ri->ri_tflags &= ~tflags_arg->tflags;;
+			ri->ri_tflags &= ~tflags_arg->tflags;
 		}
 		rc = 0;
 	}
@@ -523,7 +523,17 @@ static int rbtrace_ctrl_tflags(struct rbtrace_info *ri, void *argp)
 
 static int rbtrace_ctrl_info(struct rbtrace_info *ri, void *argp)
 {
-	int rc = 0;
+	int rc = -1;
+	struct rbtrace_op_info_arg *info_arg;
+
+	if (argp != NULL) {
+		info_arg = (struct rbtrace_op_info_arg *)argp;
+		info_arg->flags = ri->ri_flags;
+		info_arg->tflags = ri->ri_tflags;
+		info_arg->file_size = *(rbt_globals.fsize_ptr);
+		strcpy(info_arg->file_path, ri->ri_file_path);
+		rc = 0;
+	}
 
 	return rc;
 }

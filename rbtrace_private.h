@@ -78,6 +78,13 @@ struct rbtrace_op_tflags_arg {
 	uint64_t tflags;
 };
 
+struct rbtrace_op_info_arg {
+	char file_path[RBTRACE_MAX_PATH];
+	uint64_t flags;
+	uint64_t tflags;
+	uint64_t file_size;
+};
+
 typedef int (*rbtrace_op_handler)(struct rbtrace_info *ri, void *argp);
 
 int rbtrace_ctrl(rbtrace_ring_t ring, rbtrace_op_t op,

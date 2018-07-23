@@ -6,6 +6,8 @@
 #include "rbtracedef.h"
 #include "rbtrace_private.h"
 
+#define ONE_MB	(1024UL * 1024UL)
+
 struct rbtrace_option {
 	rbtrace_ring_t ring;
 	char *file;
@@ -44,9 +46,27 @@ static char *rbtrace_op_to_str(rbtrace_op_t op)
 	return "unknown";
 }
 
+static char *flags_to_str(uint64_t flags)
+{
+	return NULL;
+}
+
 static uint64_t str_to_tflags(char *str)
 {
 	return 0;
+}
+
+static char *tflags_to_str(uint64_t tflags)
+{
+	return NULL;
+}
+
+static void dump_rbtrace_info(struct rbtrace_op_info_arg *info_arg)
+{
+	printf("flags    : %s\n", flags_to_str(info_arg->flags));
+	printf("tflags   : %s\n", tflags_to_str(info_arg->tflags));
+	printf("file size: %ld\n", info_arg->file_size / ONE_MB);
+	printf("file path: %s\n", info_arg->file_path);
 }
 
 static void usage(void);
@@ -58,6 +78,7 @@ int main(int argc, char *argv[])
 	char *endptr = NULL;
 	rbtrace_op_t op = RBTRACE_OP_MAX;
 	struct rbtrace_op_tflags_arg tflags_arg;
+	struct rbtrace_op_info_arg info_arg;
 	bool_t rbtrace_inited = FALSE;
 	bool_t do_open = FALSE;
 	bool_t do_close = FALSE;
@@ -167,7 +188,7 @@ int main(int argc, char *argv[])
 	}
 	if (do_size) {
 		op = RBTRACE_OP_SIZE;
-		opts.size *= (1024*1024); // Transfer to bytes
+		opts.size *= ONE_MB; // Transfer to bytes
 		rc = rbtrace_ctrl(opts.ring, op, &opts.size);
 		if (rc != 0) {
 			goto out;
@@ -207,6 +228,12 @@ int main(int argc, char *argv[])
 	}
 	if (do_info) {
 		op = RBTRACE_OP_INFO;
+		rc = rbtrace_ctrl(opts.ring, op, &info_arg);
+		if (rc != 0) {
+			goto out;
+		} else {
+			dump_rbtrace_info(&info_arg);
+		}
 	}
 
  out:

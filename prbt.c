@@ -235,8 +235,7 @@ parse_trace_file(int fd, FILE *fp,
 		}
 
 		rr = (struct rbtrace_record *)(page + off_in_pg);
-		nbytes -= off_in_pg;
-		while (nbytes >= sizeof(*rr)) {
+		while (off_in_pg < nbytes) {
 			/* Parse the trace record */
 			stop = parse_fn(cnt, fp, rr);
 			cnt++;
@@ -244,7 +243,7 @@ parse_trace_file(int fd, FILE *fp,
 				goto out;
 			}
 			rr++;
-			nbytes -= sizeof(*rr);
+			off_in_pg += sizeof(*rr);
 		}
 
 		page_idx++;
@@ -260,6 +259,7 @@ parse_trace_file(int fd, FILE *fp,
 	/* The file is wrapped, handle the rest of the records */
 	again = TRUE;
 	page_idx = 0;
+	off_in_pg = 0;
 
 	do {
 		nbytes = load_trace_page(fd, page_idx, page, page_size);
@@ -274,8 +274,7 @@ parse_trace_file(int fd, FILE *fp,
 		}
 
 		rr = (struct rbtrace_record *)(page + off_in_pg);
-		nbytes -= off_in_pg;
-		while (nbytes >= sizeof(*rr)) {
+		while (off_in_pg < nbytes) {
 			off_in_file = sizeof(*prf) +
 				page_idx * page_size +
 				off_in_pg;
@@ -290,7 +289,6 @@ parse_trace_file(int fd, FILE *fp,
 			}
 			rr++;
 			off_in_pg += sizeof(*rr);
-			nbytes -= sizeof(*rr);
 		}
 
 		page_idx++;
