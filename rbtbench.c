@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -92,8 +93,8 @@ int main(int argc, char *argv[])
 	int rc = 0;
 	int ch = 0;
 	int shmfd = -1;
-	bool_t rbtrace_inited = FALSE;
-	bool_t is_parent = TRUE;
+	bool rbtrace_inited = false;
+	bool is_parent = true;
 	pthread_mutexattr_t mutex_attr;
 	pthread_condattr_t cond_attr;
 	pthread_t *threads = NULL;
@@ -160,7 +161,7 @@ int main(int argc, char *argv[])
 		pid = fork();
 		assert(pid != -1);
 		if (pid == 0) {
-			is_parent = FALSE;
+			is_parent = false;
 			break;
 		} else {
 			printf("forked process %d!\n", pid);
@@ -186,7 +187,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "rbtrace init failed, error:%d!\n", rc);
 		goto out;
 	}
-	rbtrace_inited = TRUE;
+	rbtrace_inited = true;
 
 	/* Create benchmark threads */
 	if (opts.nr_threads > 1) {

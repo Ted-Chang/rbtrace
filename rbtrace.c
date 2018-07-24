@@ -36,7 +36,7 @@ struct rbtrace_config rbt_cfgs[] = {
 STATIC_ASSERT((sizeof(rbt_cfgs)/sizeof(rbt_cfgs[0])) == RBTRACE_RING_MAX);
 
 struct rbtrace_global_data rbt_globals = {
-	.inited = FALSE,
+	.inited = false,
 	.shm_fd = -1,
 	.shm_size = 0,
 	.shm_base = MAP_FAILED,
@@ -185,7 +185,7 @@ inline int rbtrace_traffic_enabled(rbtrace_ring_t ring, uint16_t traceid)
 	if ((ring >= RBTRACE_RING_MAX) ||
 	    (traceid >= RBT_LAST) ||
 	    (rbt_globals.ri_ptr == NULL)) {
-		return FALSE;
+		return false;
 	}
 
 	return rbt_globals.ri_ptr[ring].ri_tflags & (1 << traceid);
@@ -236,10 +236,10 @@ void rbtrace_globals_init(int shm_fd, char *shm_base,
 	offset += sizeof(struct rbtrace_info) * RBTRACE_RING_MAX;
 	rbt_globals.rr_base = (struct rbtrace_record *)(shm_base + offset);
 
-	rbt_globals.inited = TRUE;
+	rbt_globals.inited = true;
 }
 
-void rbtrace_globals_cleanup(bool_t is_daemon)
+void rbtrace_globals_cleanup(bool is_daemon)
 {
 	if ((rbt_globals.sem_ptr != SEM_FAILED) &&
 	    (rbt_globals.sem_ptr != NULL)) {
@@ -269,12 +269,12 @@ void rbtrace_globals_cleanup(bool_t is_daemon)
 	rbt_globals.sem_ptr = SEM_FAILED;
 	rbt_globals.shm_fd = -1;
 	rbt_globals.shm_base = MAP_FAILED;
-	rbt_globals.inited = FALSE;
+	rbt_globals.inited = false;
 }
 
 void rbtrace_exit(void)
 {
-	rbtrace_globals_cleanup(FALSE);
+	rbtrace_globals_cleanup(false);
 }
 
 int rbtrace_init(void)

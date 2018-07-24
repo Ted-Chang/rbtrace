@@ -21,11 +21,11 @@ STATIC_ASSERT(sizeof(struct rbtrace_fheader) < RBTRACE_FHEADER_SIZE);
 
 struct rbtrace_thread_data {
 	pthread_t thread;
-	bool_t inited;
-	bool_t terminate;
+	bool inited;
+	bool terminate;
 } rbt_thread = {
-	.inited = FALSE,
-	.terminate = FALSE,
+	.inited = false,
+	.terminate = false,
 };
 
 extern struct rbtrace_config rbt_cfgs[];
@@ -120,7 +120,7 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 }
 
 static void rbtrace_write_data(rbtrace_ring_t ring,
-			       bool_t do_flush)
+			       bool do_flush)
 {
 	struct rbtrace_info *ri = NULL;
 	union padded_rbtrace_fheader *prf = NULL;
@@ -129,7 +129,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	ssize_t nbytes = 0;
 	int flush = 0;
 	int lost = 0;
-	bool_t update_hdr = FALSE;
+	bool update_hdr = false;
 
 	if (rbt_fds[ring] == -1) {
 		dprintf("ring:%d invalid file descriptor!\n", ring);
@@ -151,7 +151,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	if (prf->hdr.wrap_pos && (ri->ri_flags & RBTRACE_DO_WRAP)) {
 		ri->ri_seek = prf->hdr.wrap_pos;
 		prf->hdr.wrap_pos += buf_size;
-		update_hdr = TRUE;
+		update_hdr = true;
 	}
 
 	/* Write buffer content to file */
@@ -175,7 +175,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 		} else if (ri->ri_flags & RBTRACE_DO_WRAP) {
 			/* Reset wrap position */
 			prf->hdr.wrap_pos = sizeof(*prf);
-			update_hdr = TRUE;
+			update_hdr = true;
 		} else if (ri->ri_flags & RBTRACE_DO_ZAP) {
 			/* Close current and open a new trace file */
 			close(rbt_fds[ring]);
@@ -240,12 +240,12 @@ static void *rbtrace_thread_fn(void *arg)
 		if (ri->ri_flags & RBTRACE_DO_CLOSE) {
 			/* Flush inactive buffer */
 			if (ri->ri_flush) {
-				rbtrace_write_data(ring, FALSE);
+				rbtrace_write_data(ring, false);
 			}
 
 			/* We were asked to flush all trace records */
 			if (ri->ri_flags & RBTRACE_DO_FLUSH) {
-				rbtrace_write_data(ring, TRUE);
+				rbtrace_write_data(ring, true);
 				ri->ri_flags &= ~RBTRACE_DO_FLUSH;
 			}
 
@@ -271,11 +271,11 @@ static void *rbtrace_thread_fn(void *arg)
 		/* Normal write or flush */
 		else if (ri->ri_flags & RBTRACE_DO_DISK) {
 			if (ri->ri_flush) {
-				rbtrace_write_data(ring, FALSE);
+				rbtrace_write_data(ring, false);
 			}
 			if (ri->ri_flags & RBTRACE_DO_FLUSH) {
 				ri->ri_flags &= ~RBTRACE_DO_FLUSH;
-				rbtrace_write_data(ring, TRUE);
+				rbtrace_write_data(ring, true);
 			}
 		}
 	}
@@ -361,7 +361,7 @@ int rbtrace_daemon_init(void)
 	if (rc != 0) {
 		goto pthread_fail;
 	}
-	rbt_thread.inited = TRUE;
+	rbt_thread.inited = true;
 	rc = pthread_setname_np(rbt_thread.thread,
 				RBTRACE_THREAD_NAME);
 	if (rc != 0) {
@@ -371,7 +371,7 @@ int rbtrace_daemon_init(void)
 	return 0;
 
  pthread_fail:
-	rbtrace_globals_cleanup(TRUE);
+	rbtrace_globals_cleanup(true);
 	goto out;
  sem_open_fail:
 	munmap(shm_base, shm_size);
@@ -389,14 +389,14 @@ void rbtrace_daemon_exit(void)
 
 	/* Terminate rbtrace thread */
 	if (rbt_thread.inited) {
-		rbt_thread.terminate = TRUE;
+		rbt_thread.terminate = true;
 		sem_post(rbt_globals.sem_ptr);
 		pthread_join(rbt_thread.thread, NULL);
-		rbt_thread.inited = FALSE;
+		rbt_thread.inited = false;
 	}
 
 	/* Cleanup global data */
-	rbtrace_globals_cleanup(TRUE);
+	rbtrace_globals_cleanup(true);
 
 	/* Close all fds */
 	for (i = 0; i < RBTRACE_RING_MAX; i++) {
@@ -474,7 +474,7 @@ static int rbtrace_ctrl_wrap(struct rbtrace_info *ri, void *argp)
 	int rc = -1;
 
 	if (!(ri->ri_flags & RBTRACE_DO_ZAP) &&	(argp != NULL)) {
-		bool_t enable = *((bool_t *)argp);
+		bool enable = *((bool *)argp);
 		if (enable) {
 			ri->ri_flags |= RBTRACE_DO_WRAP;
 		} else {
@@ -491,7 +491,7 @@ static int rbtrace_ctrl_zap(struct rbtrace_info *ri, void *argp)
 	int rc = -1;
 
 	if (!(ri->ri_flags & RBTRACE_DO_WRAP) && (argp != NULL)) {
-		bool_t enable = *((bool_t *)argp);
+		bool enable = *((bool *)argp);
 		if (enable) {
 			ri->ri_flags |= RBTRACE_DO_ZAP;
 		} else {

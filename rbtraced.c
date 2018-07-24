@@ -15,13 +15,13 @@
 struct rbtrace_server {
 	char *pidfile;
 	char *logfile;
-	bool_t daemonize;
-	bool_t terminate;
+	bool daemonize;
+	bool terminate;
 } server = {
 	.pidfile = RBTRACED_DFT_PID_FILE,
 	.logfile = RBTRACED_DFT_LOG_FILE,
-	.daemonize = FALSE,
-	.terminate = FALSE
+	.daemonize = false,
+	.terminate = false
 };
 
 static void usage(void);
@@ -40,7 +40,7 @@ static void sig_handler(const int sig)
 		unlink(server.pidfile);
 	}
 
-	server.terminate = TRUE;
+	server.terminate = true;
 }
 
 static void daemonize(void)
@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
 	while ((ch = getopt(argc, argv, "dhp:l:v")) != -1) {
 		switch (ch) {
 		case 'd':
-			server.daemonize = TRUE;
+			server.daemonize = true;
 			break;
 		case 'p':
 			server.pidfile = optarg;

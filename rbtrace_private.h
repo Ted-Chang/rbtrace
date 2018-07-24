@@ -2,6 +2,7 @@
 #define __RBTRACE_PVT_H__
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <semaphore.h>
 #include <assert.h>
 #include "rbtrace.h"
@@ -49,7 +50,7 @@ struct rbtrace_config {
 };
 
 struct rbtrace_global_data {
-	bool_t inited;
+	bool inited;
 	int shm_fd;		// shared memory fd
 	size_t shm_size;
 	char *shm_base;
@@ -74,7 +75,7 @@ typedef enum rbtrace_op {
 } rbtrace_op_t;
 
 struct rbtrace_op_tflags_arg {
-	bool_t set;
+	bool set;
 	uint64_t tflags;
 };
 
@@ -94,7 +95,7 @@ void rbtrace_signal_thread(struct rbtrace_info *ri);
 void rbtrace_globals_init(int fd, char *shm_base,
 			  size_t shm_size,
 			  sem_t *sem_ptr);
-void rbtrace_globals_cleanup(bool_t is_daemon);
+void rbtrace_globals_cleanup(bool is_daemon);
 int rbtrace_daemon_init(void);
 void rbtrace_daemon_exit(void);
 

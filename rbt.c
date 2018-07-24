@@ -14,16 +14,16 @@ struct rbtrace_option {
 	uint64_t size;
 	uint64_t stflags;
 	uint64_t ctflags;
-	bool_t wrap;
-	bool_t zap;
+	bool wrap;
+	bool zap;
 } opts = {
 	.ring = RBTRACE_RING_IO,
 	.file = NULL,
 	.size = 0,
 	.stflags = 0,
 	.ctflags = 0,
-	.wrap = FALSE,
-	.zap = FALSE,
+	.wrap = false,
+	.zap = false,
 };
 
 char *rbtrace_op_str[] = {
@@ -79,15 +79,15 @@ int main(int argc, char *argv[])
 	rbtrace_op_t op = RBTRACE_OP_MAX;
 	struct rbtrace_op_tflags_arg tflags_arg;
 	struct rbtrace_op_info_arg info_arg;
-	bool_t rbtrace_inited = FALSE;
-	bool_t do_open = FALSE;
-	bool_t do_close = FALSE;
-	bool_t do_size = FALSE;
-	bool_t do_wrap = FALSE;
-	bool_t do_zap = FALSE;
-	bool_t do_info = FALSE;
-	bool_t do_set_tflags = FALSE;
-	bool_t do_clear_tflags = FALSE;
+	bool rbtrace_inited = false;
+	bool do_open = false;
+	bool do_close = false;
+	bool do_size = false;
+	bool do_wrap = false;
+	bool do_zap = false;
+	bool do_info = false;
+	bool do_set_tflags = false;
+	bool do_clear_tflags = false;
 
 	while ((ch = getopt(argc, argv, "r:o:cw:z:is:S:C:h")) != -1) {
 		switch (ch) {
@@ -106,35 +106,35 @@ int main(int argc, char *argv[])
 					RBTRACE_MAX_PATH);
 				goto out;
 			}
-			do_open = TRUE;
+			do_open = true;
 			break;
 		case 'c':
-			do_close = TRUE;
+			do_close = true;
 			break;
 		case 'w':
 			if (strcmp(optarg, "on") == 0) {
-				opts.wrap = TRUE;
+				opts.wrap = true;
 			} else if (strcmp(optarg, "off") == 0) {
-				opts.wrap = FALSE;
+				opts.wrap = false;
 			} else {
 				fprintf(stderr, "Invalid option:%s\n", optarg);
 				goto out;
 			}
-			do_wrap = TRUE;
+			do_wrap = true;
 			break;
 		case 'z':
 			if (strcmp(optarg, "on") == 0) {
-				opts.zap = TRUE;
+				opts.zap = true;
 			} else if (strcmp(optarg, "off") == 0) {
-				opts.zap = FALSE;
+				opts.zap = false;
 			} else {
 				fprintf(stderr, "Invalid option:%s\n", optarg);
 				goto out;
 			}
-			do_zap = TRUE;
+			do_zap = true;
 			break;
 		case 'i':
-			do_info = TRUE;
+			do_info = true;
 			break;
 		case 's':
 			opts.size = strtoull(optarg, &endptr, 10);
@@ -142,21 +142,21 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "Invalid argment size!\n");
 				goto out;
 			}
-			do_size = TRUE;
+			do_size = true;
 			break;
 		case 'S':
 			opts.stflags = str_to_tflags(optarg);
 			if (opts.stflags == 0) {
 				goto out;
 			}
-			do_set_tflags = TRUE;
+			do_set_tflags = true;
 			break;
 		case 'C':
 			opts.ctflags = str_to_tflags(optarg);
 			if (opts.ctflags == 0) {
 				goto out;
 			}
-			do_clear_tflags = TRUE;
+			do_clear_tflags = true;
 			break;
 		case 'h':	// Fall through
 		default:
@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "rbtrace init failed, error:%d!\n", rc);
 		goto out;
 	}
-	rbtrace_inited = TRUE;
+	rbtrace_inited = true;
 
 	if (do_wrap) {
 		op = RBTRACE_OP_WRAP;
@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	if (do_set_tflags) {
-		tflags_arg.set = TRUE;
+		tflags_arg.set = true;
 		tflags_arg.tflags = opts.stflags;
 		op = RBTRACE_OP_TFLAGS;
 		rc = rbtrace_ctrl(opts.ring, op, &tflags_arg);
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	if (do_clear_tflags) {
-		tflags_arg.set = FALSE;
+		tflags_arg.set = false;
 		tflags_arg.tflags = opts.ctflags;
 		op = RBTRACE_OP_TFLAGS;
 		rc = rbtrace_ctrl(opts.ring, op, &tflags_arg);

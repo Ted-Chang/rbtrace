@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
@@ -12,7 +13,7 @@ struct prbt_option {
 	char *out_path;
 	time_t start_time;
 	time_t end_time;
-	bool_t only_show_info;
+	bool only_show_info;
 } opts = {
 	.file_path = NULL,
 	.out_path = NULL,
@@ -158,8 +159,8 @@ static size_t load_trace_page(int fd, uint64_t page_idx,
 	return nbytes;
 }
 
-static bool_t trace_print_fn(uint64_t idx, FILE *fp,
-			     struct rbtrace_record *rr)
+static bool trace_print_fn(uint64_t idx, FILE *fp,
+			   struct rbtrace_record *rr)
 {
 	char record_buf[256];
 	int nchars = 0;
@@ -192,11 +193,11 @@ static bool_t trace_print_fn(uint64_t idx, FILE *fp,
 static void
 parse_trace_file(int fd, FILE *fp,
 		 union padded_rbtrace_fheader *prf,
-		 bool_t (*parse_fn)(uint64_t idx, FILE *fp,
-				    struct rbtrace_record *rr))
+		 bool (*parse_fn)(uint64_t idx, FILE *fp,
+				  struct rbtrace_record *rr))
 {
-	bool_t again = TRUE;
-	bool_t stop = FALSE;
+	bool again = true;
+	bool stop = false;
 	size_t nbytes = 0;
 	size_t page_size = 0;
 	uint64_t page_idx = 0;

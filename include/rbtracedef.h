@@ -8,18 +8,6 @@
 extern "C" {
 #endif
 
-#ifndef TRUE
-#define TRUE	1
-#endif
-
-#ifndef FALSE
-#define FALSE	0
-#endif
-
-#ifndef bool_t
-typedef int bool_t;
-#endif
-
 #ifndef STATIC_ASSERT
 #define STATIC_ASSERT(_expr_)					\
 	typedef char __junk_##__LINE__[(_expr_) == 0 ? -1 : 1];
