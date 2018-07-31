@@ -19,9 +19,6 @@ typedef enum rbtrace_ring {
 #define RBT_TRAFFIC_TEST	0x0002
 #define RBT_LAST		RBT_TRAFFIC_TEST
 
-/* Max length of trace file path */
-#define RBTRACE_MAX_PATH	(256)
-
 int rbtrace(rbtrace_ring_t ring, uint16_t traceid, uint64_t a0,
 	    uint64_t a1, uint64_t a2, uint64_t a3);
 inline int rbtrace_traffic_enabled(rbtrace_ring_t ring,

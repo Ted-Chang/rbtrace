@@ -13,6 +13,14 @@ extern "C" {
 	typedef char __junk_##__LINE__[(_expr_) == 0 ? -1 : 1];
 #endif
 
+/* Max length of trace file path */
+#define RBTRACE_MAX_PATH	(256)
+
+/* Max length of trace name and description */
+#define RBTRACE_MAX_NAME	(64)
+#define RBTRACE_MAX_DESC	(128)
+
+/* Format of a trace record */
 struct rbtrace_record {
 	struct timespec rr_timestamp;
 	uint32_t rr_thread;
@@ -29,6 +37,7 @@ struct rbtrace_record {
 #define RBTRACE_MAJOR	1
 #define RBTRACE_MINOR	0
 
+/* Format of a trace file header */
 struct rbtrace_fheader {
 	char magic[8];		// Magic number
 	uint16_t major;		// Major release
@@ -43,6 +52,7 @@ struct rbtrace_fheader {
 };
 
 #define RBTRACE_FHEADER_SIZE	512
+
 union padded_rbtrace_fheader {
 	struct rbtrace_fheader hdr;
 	char pad[RBTRACE_FHEADER_SIZE];

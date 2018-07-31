@@ -6,6 +6,7 @@
 #include <semaphore.h>
 #include <assert.h>
 #include "rbtrace.h"
+#include "rbtracedef.h"
 
 #ifndef DBG_ASSERT
 #define DBG_ASSERT	assert
@@ -37,9 +38,9 @@ struct rbtrace_info {
 #define RBTRACE_DO_DISK		(1 << 1)
 #define RBTRACE_DO_OPEN		(1 << 2)
 #define RBTRACE_DO_WRAP		(1 << 3)
-#define RBTRACE_DO_CLOSE	(1 << 4)
-#define RBTRACE_DO_FLUSH	(1 << 5)
-#define RBTRACE_DO_ZAP		(1 << 6)
+#define RBTRACE_DO_ZAP		(1 << 4)
+#define RBTRACE_DO_CLOSE	(1 << 5)
+#define RBTRACE_DO_FLUSH	(1 << 6)
 
 struct rbtrace_config {
 	rbtrace_ring_t rc_ring;
@@ -80,6 +81,8 @@ struct rbtrace_op_tflags_arg {
 };
 
 struct rbtrace_op_info_arg {
+	char ring_name[RBTRACE_MAX_NAME];
+	char ring_desc[RBTRACE_MAX_DESC];
 	char file_path[RBTRACE_MAX_PATH];
 	uint64_t flags;
 	uint64_t tflags;

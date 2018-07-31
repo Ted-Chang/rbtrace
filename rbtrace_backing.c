@@ -532,6 +532,11 @@ static int rbtrace_ctrl_info(struct rbtrace_info *ri, void *argp)
 		info_arg->tflags = ri->ri_tflags;
 		info_arg->file_size = *(rbt_globals.fsize_ptr);
 		strcpy(info_arg->file_path, ri->ri_file_path);
+
+		strncpy(info_arg->ring_name, rbt_cfgs[ri->ri_ring].rc_name,
+			sizeof(info_arg->ring_name));
+		strncpy(info_arg->ring_desc, rbt_cfgs[ri->ri_ring].rc_desc,
+			sizeof(info_arg->ring_desc));
 		rc = 0;
 	}
 

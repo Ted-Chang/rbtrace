@@ -38,6 +38,36 @@ char *rbtrace_op_str[] = {
 
 STATIC_ASSERT(sizeof(rbtrace_op_str)/sizeof(rbtrace_op_str[0]) == RBTRACE_OP_MAX);
 
+struct flag_name {
+	uint64_t flag;
+	char *name;
+} flg_names[] = {
+	{
+		.flag = RBTRACE_DO_DISK,
+		.name = "DISK",
+	},
+	{
+		.flag = RBTRACE_DO_OPEN,
+		.name = "OPEN",
+	},
+	{
+		.flag = RBTRACE_DO_WRAP,
+		.name = "WRAP",
+	},
+	{
+		.flag = RBTRACE_DO_ZAP,
+		.name = "ZAP",
+	},
+	{
+		.flag = RBTRACE_DO_CLOSE,
+		.name = "CLOSE",
+	},
+	{
+		.flag = RBTRACE_DO_FLUSH,
+		.name = "FLUSH",
+	},
+};
+
 static char *rbtrace_op_to_str(rbtrace_op_t op)
 {
 	if (op < RBTRACE_OP_MAX) {
@@ -46,27 +76,73 @@ static char *rbtrace_op_to_str(rbtrace_op_t op)
 	return "unknown";
 }
 
-static char *flags_to_str(uint64_t flags)
+static char *flags_to_str(uint64_t flags, char *buf, int bufsz)
 {
-	return NULL;
+	int i;
+	int nchars;
+	char *ret;
+
+	buf[0] = '\0';
+	ret = buf;
+	for (i = 0; i < sizeof(flg_names)/sizeof(flg_names[0]); i++) {
+		if (flags & flg_names[i].flag) {
+			nchars = snprintf(buf, bufsz, "%s ",
+					  flg_names[i].name);
+			if (nchars < 0) {
+				break;
+			}
+
+			buf += nchars;
+			bufsz -= nchars;
+		}
+	}
+
+	return ret;
 }
 
 static uint64_t str_to_tflags(char *str)
 {
-	return 0;
+	char *pch;
+	char *ptr;
+	uint64_t tflags = 0;
+
+	ptr = strdup(str);
+	if (ptr == NULL) {
+		fprintf(stderr, "insufficient memory to parse tflags\n");
+		return 0;
+	}
+
+	pch = strtok(ptr, ",");
+	while (pch != NULL) {
+		pch = strtok(NULL, ",");
+	}
+
+	free(ptr);
+	return tflags;
 }
 
-static char *tflags_to_str(uint64_t tflags)
+static char *tflags_to_str(uint64_t tflags, char *buf, int bufsz)
 {
-	return NULL;
+	char *ret;
+
+	buf[0] = '\0';
+	ret = buf;
+
+	return ret;
 }
 
 static void dump_rbtrace_info(struct rbtrace_op_info_arg *info_arg)
 {
-	printf("flags    : %s\n", flags_to_str(info_arg->flags));
-	printf("tflags   : %s\n", tflags_to_str(info_arg->tflags));
-	printf("file size: %ld\n", info_arg->file_size / ONE_MB);
-	printf("file path: %s\n", info_arg->file_path);
+	char buf[512];
+
+	printf("name      : %s\n", info_arg->ring_name);
+	printf("desc      : %s\n", info_arg->ring_desc);
+	printf("flags     : %s\n", flags_to_str(info_arg->flags, buf,
+						sizeof(buf)));
+	printf("tflags    : %s\n", tflags_to_str(info_arg->tflags, buf,
+						 sizeof(buf)));
+	printf("file size : %ld\n", info_arg->file_size / ONE_MB);
+	printf("file path : %s\n", info_arg->file_path);
 }
 
 static void usage(void);
