@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
 			break;
 		case 'v':
 			version();
-			break;
+			goto out;
 		case 'h':
 		default:
 			rc = -1;
@@ -102,15 +102,9 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (signal(SIGTERM, sig_handler) == SIG_ERR) {
-		;
-	}
-	if (signal(SIGQUIT, sig_handler) == SIG_ERR) {
-		;
-	}
-	if (signal(SIGINT, sig_handler) == SIG_ERR) {
-		;
-	}
+	(void)signal(SIGTERM, sig_handler);
+	(void)signal(SIGQUIT, sig_handler);
+	(void)signal(SIGINT, sig_handler);
 
 	if (server.daemonize) {
 		daemonize();
@@ -150,6 +144,7 @@ static void usage(void)
 	       "       [-d]            Run as a daemon\n"
 	       "       [-p <pidfile>]  Specify pid file, default is %s\n"
 	       "       [-l <logfile>]  Specify log file, default is %s\n"
+	       "       [-v]            Display the version information\n"
 	       "       [-h]            Display this help message\n",
 	       RBTRACED_DFT_PID_FILE,
 	       RBTRACED_DFT_LOG_FILE);

@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include "rbtracedef.h"
+#include "version.h"
 
 struct prbt_option {
 	char *file_path;
@@ -19,10 +20,11 @@ struct prbt_option {
 	.out_path = NULL,
 	.start_time = 0,
 	.end_time = 0,
-	.only_show_info = FALSE,
+	.only_show_info = false,
 };
 
 static void usage(void);
+static void version(void);
 
 static int parse_trace_header(int fd, FILE *fp,
 			      union padded_rbtrace_fheader *prf)
@@ -187,7 +189,7 @@ static bool trace_print_fn(uint64_t idx, FILE *fp,
 	fprintf(fp, record_buf);
 
  out:
-	return FALSE;
+	return false;
 }
 
 static void
@@ -232,7 +234,7 @@ parse_trace_file(int fd, FILE *fp,
 				page_idx, off_in_pg);
 			goto out;
 		} else if (nbytes < page_size) {
-			again = FALSE;
+			again = false;
 		}
 
 		rr = (struct rbtrace_record *)(page + off_in_pg);
@@ -258,7 +260,7 @@ parse_trace_file(int fd, FILE *fp,
 	}
 
 	/* The file is wrapped, handle the rest of the records */
-	again = TRUE;
+	again = true;
 	page_idx = 0;
 	off_in_pg = 0;
 
@@ -271,7 +273,7 @@ parse_trace_file(int fd, FILE *fp,
 				off_in_pg);
 			goto out;
 		} else if (nbytes < page_size) {
-			again = FALSE;
+			again = false;
 		}
 
 		rr = (struct rbtrace_record *)(page + off_in_pg);
@@ -311,7 +313,7 @@ int main(int argc, char *argv[])
 	FILE *fp = NULL;
 	struct tm time;
 
-	while ((ch = getopt(argc, argv, "f:o:s:e:Ih")) != -1) {
+	while ((ch = getopt(argc, argv, "f:o:s:e:Ivh")) != -1) {
 		switch (ch) {
 		case 'f':
 			opts.file_path = optarg;
@@ -342,8 +344,11 @@ int main(int argc, char *argv[])
 			}
 			break;
 		case 'I':
-			opts.only_show_info = TRUE;
+			opts.only_show_info = true;
 			break;
+		case 'v':
+			version();
+			goto out;
 		case 'h':
 		default:
 			usage();
@@ -400,5 +405,11 @@ static void usage(void)
 	       "       [-f <trace-file>]  Specify trace file path\n"
 	       "       [-o <output-file>] Specify output file path\n"
 	       "       [-I]               Only show trace file info\n"
+	       "       [-v]               Display version information\n"
 	       "       [-h]               Display this help message\n");
+}
+
+static void version(void)
+{
+	printf("rbtrace parse tool v=%s\n", RBTRACE_VERSION);
 }

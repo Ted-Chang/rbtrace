@@ -22,4 +22,4 @@ rbtbench:
 	$(CC) $(CFLAGS) -O2 rbtbench.c librbtrace.a -o rbtbench
 
 clean:
-	rm -rf *.o librbtrace.a rbt rbtraced rbtbench
+	rm -rf *.o librbtrace.a rbt prbt rbtraced rbtbench

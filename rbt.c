@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include "rbtracedef.h"
 #include "rbtrace_private.h"
+#include "version.h"
 
 #define ONE_MB	(1024UL * 1024UL)
 
@@ -146,6 +147,7 @@ static void dump_rbtrace_info(struct rbtrace_op_info_arg *info_arg)
 }
 
 static void usage(void);
+static void version(void);
 
 int main(int argc, char *argv[])
 {
@@ -165,7 +167,7 @@ int main(int argc, char *argv[])
 	bool do_set_tflags = false;
 	bool do_clear_tflags = false;
 
-	while ((ch = getopt(argc, argv, "r:o:cw:z:is:S:C:h")) != -1) {
+	while ((ch = getopt(argc, argv, "r:o:cw:z:is:S:C:vh")) != -1) {
 		switch (ch) {
 		case 'r':
 			if (strcmp(optarg, "io") == 0) {
@@ -234,6 +236,9 @@ int main(int argc, char *argv[])
 			}
 			do_clear_tflags = true;
 			break;
+		case 'v':
+			version();
+			goto out;
 		case 'h':	// Fall through
 		default:
 			usage();
@@ -254,8 +259,7 @@ int main(int argc, char *argv[])
 		if (rc != 0) {
 			goto out;
 		}
-	}
-	if (do_zap) {
+	} else if (do_zap) {
 		op = RBTRACE_OP_ZAP;
 		rc = rbtrace_ctrl(opts.ring, op, &opts.zap);
 		if (rc != 0) {
@@ -276,8 +280,7 @@ int main(int argc, char *argv[])
 		if (rc != 0) {
 			goto out;
 		}
-	}
-	if (do_close) {
+	} else if (do_close) {
 		op = RBTRACE_OP_CLOSE;
 		rc = rbtrace_ctrl(opts.ring, op, NULL);
 		if (rc != 0) {
@@ -334,5 +337,11 @@ static void usage(void)
 	       "       [-z on|off]      Enable/disable zap, exclusive with wrap\n"
 	       "       [-S <trace-id>]  Set trace ID to be enabled\n"
 	       "       [-C <trace-id>]  Clear trace ID to be disabled\n"
+	       "       [-v]             Display the version information\n"
 	       "       [-h]             Display this help message\n");
+}
+
+static void version(void)
+{
+	printf("rbtrace cli tool v=%s\n", RBTRACE_VERSION);
 }
