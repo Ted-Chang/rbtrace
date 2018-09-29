@@ -21,5 +21,8 @@ prbt:
 rbtbench:
 	$(CC) $(CFLAGS) -O2 rbtbench.c librbtrace.a -o rbtbench
 
+test_segfault:
+	$(CC) $(CFLAGS) -O2 test_segfault.c librbtrace.a -o test_segfault
+
 clean:
-	rm -rf *.o librbtrace.a rbt prbt rbtraced rbtbench
+	rm -rf *.o librbtrace.a rbt prbt rbtraced rbtbench test_segfault

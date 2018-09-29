@@ -156,7 +156,6 @@ ringwrap(struct rbtrace_info *ri)
 int rbtrace(rbtrace_ring_t ring, uint16_t traceid, uint64_t a0,
 	    uint64_t a1, uint64_t a2, uint64_t a3)
 {
-	int rc = 0;
 	struct rbtrace_info *ri;
 	struct rbtrace_record *rr;
 
@@ -168,7 +167,7 @@ int rbtrace(rbtrace_ring_t ring, uint16_t traceid, uint64_t a0,
 	ri = rbt_globals.ri_ptr + ring;
 	rr = ringwrap(ri);
 	if (rr == NULL) {
-		rc = -1;
+		return -1;
 	} else {
 		rr->rr_traceid = traceid;
 		rr->rr_a0 = a0;
@@ -177,7 +176,7 @@ int rbtrace(rbtrace_ring_t ring, uint16_t traceid, uint64_t a0,
 		rr->rr_a3 = a3;
 	}
 
-	return rc;
+	return 0;
 }
 
 inline int rbtrace_traffic_enabled(rbtrace_ring_t ring, uint16_t traceid)

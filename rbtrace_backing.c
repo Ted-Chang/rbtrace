@@ -31,7 +31,6 @@ struct rbtrace_thread_data {
 extern struct rbtrace_config rbt_cfgs[];
 
 int rbt_fds[RBTRACE_RING_MAX];
-int rbt_file_nrs[RBTRACE_RING_MAX];
 union padded_rbtrace_fheader rbt_hdrs[RBTRACE_RING_MAX];
 uint64_t total_buffers = 0;
 
@@ -66,6 +65,8 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 	ssize_t nbytes = 0;
 	struct rbtrace_info *ri;
 	char path[RBTRACE_MAX_PATH];
+	struct timespec ts;
+	struct tm *gm = NULL;
 
 	ri = &rbt_globals.ri_ptr[ring];
 
@@ -75,8 +76,20 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 	}
 
 	if (ri->ri_flags & RBTRACE_DO_ZAP) {
-		snprintf(path, sizeof(path), "%s.%d",
-			 ri->ri_file_path, rbt_file_nrs[ring]);
+		clock_gettime(CLOCK_REALTIME, &ts);
+		gm = localtime(&ts.tv_sec);
+		if (gm != NULL) {
+			snprintf(path, sizeof(path),
+				 "%s.%02d-%02d_%02d-%02d-%02d_%06ld",
+				 ri->ri_file_path, gm->tm_mon + 1,
+				 gm->tm_mday, gm->tm_hour, gm->tm_min,
+				 gm->tm_sec, ts.tv_nsec / 1000);
+		} else {
+			/* Degrade to raw file name if localtime failed */
+			dprintf("ring:%d localtime failed, error:%d\n",
+				ring, errno);
+			strcpy(path, ri->ri_file_path);
+		}
 	} else {
 		strcpy(path, ri->ri_file_path);
 	}
@@ -180,7 +193,6 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 			/* Close current and open a new trace file */
 			close(rbt_fds[ring]);
 			rbt_fds[ring] = -1;
-			rbt_file_nrs[ring]++;
 			rbtrace_write_header(ring);
 		} else {
 			/* Close file and stop tracing */
@@ -254,7 +266,6 @@ static void *rbtrace_thread_fn(void *arg)
 				//fsync(rbt_fds[ring]);
 				close(rbt_fds[ring]);
 				rbt_fds[ring] = -1;
-				rbt_file_nrs[ring] = 0;
 				dprintf("ring:%d file %s closed!\n",
 					ring, ri->ri_file_path);
 				memset(ri->ri_file_path, 0,
@@ -353,7 +364,6 @@ int rbtrace_daemon_init(void)
 					       &rbt_globals.ri_ptr[i],
 					       off);
 		rbt_fds[i] = -1;
-		rbt_file_nrs[i] = 0;
 	}
 
 	rc = pthread_create(&rbt_thread.thread, NULL,
