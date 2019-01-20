@@ -34,7 +34,9 @@ int rbt_fds[RBTRACE_RING_MAX];
 union padded_rbtrace_fheader rbt_hdrs[RBTRACE_RING_MAX];
 uint64_t total_buffers = 0;
 
-static void rbtrace_format_header(rbtrace_ring_t ring)
+static void rbtrace_format_header(rbtrace_ring_t ring,
+				  struct timespec ts,
+				  struct tm *tm)
 {
 	struct rbtrace_fheader *rf;
 	struct rbtrace_config *rc;
@@ -50,9 +52,13 @@ static void rbtrace_format_header(rbtrace_ring_t ring)
 	rf->wrap_pos = 0;
 	rf->hdr_size = sizeof(rbt_hdrs[ring]);
 	rf->nr_records = rc->rc_size;
-	clock_gettime(CLOCK_REALTIME, &rf->timestamp);
+	rf->timestamp = ts;
+	rf->gmtoff = tm->tm_gmtoff;
 
 	ptr = ((char *)rf) + sizeof(*rf);
+	rf->tz_off = (uint32_t)(ptr - (char *)rf);
+	strcpy(ptr, tm->tm_zone);
+	ptr += (strlen(tm->tm_zone) + 1);
 	rf->name_off = (uint32_t)(ptr - (char *)rf);
 	strcpy(ptr, rc->rc_name);
 	ptr += (strlen(rc->rc_name) + 1);
@@ -75,21 +81,16 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 		goto out;
 	}
 
+	clock_gettime(CLOCK_REALTIME, &ts);
+	gm = localtime(&ts.tv_sec);
+	assert(gm != NULL);
+
 	if (ri->ri_flags & RBTRACE_DO_ZAP) {
-		clock_gettime(CLOCK_REALTIME, &ts);
-		gm = localtime(&ts.tv_sec);
-		if (gm != NULL) {
-			snprintf(path, sizeof(path),
-				 "%s.%02d-%02d_%02d-%02d-%02d_%06ld",
-				 ri->ri_file_path, gm->tm_mon + 1,
-				 gm->tm_mday, gm->tm_hour, gm->tm_min,
-				 gm->tm_sec, ts.tv_nsec / 1000);
-		} else {
-			/* Degrade to raw file name if localtime failed */
-			dprintf("ring:%d localtime failed, error:%d\n",
-				ring, errno);
-			strcpy(path, ri->ri_file_path);
-		}
+		snprintf(path, sizeof(path),
+			 "%s.%02d-%02d_%02d-%02d-%02d_%06ld",
+			 ri->ri_file_path, gm->tm_mon + 1,
+			 gm->tm_mday, gm->tm_hour, gm->tm_min,
+			 gm->tm_sec, ts.tv_nsec / 1000);
 	} else {
 		strcpy(path, ri->ri_file_path);
 	}
@@ -104,7 +105,7 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 	dprintf("ring:%d file %s open\n", ring, path);
 
 	/* Format the trace header */
-	rbtrace_format_header(ring);
+	rbtrace_format_header(ring, ts, gm);
 
 	/* Write trace header to trace file */
 	nbytes = pwrite(rbt_fds[ring], &rbt_hdrs[ring],

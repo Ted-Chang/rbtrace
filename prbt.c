@@ -31,7 +31,8 @@ static int parse_trace_header(int fd, FILE *fp,
 {
 	int rc = 0;
 	uint64_t nbytes = 0;
-	struct rbtrace_fheader *rf = &prf->hdr;
+	time_t tv_sec = 0;
+	struct rbtrace_fheader *rf = NULL;
 	struct tm *gm = NULL;
 
 	nbytes = pread(fd, prf, sizeof(*prf), 0);
@@ -41,31 +42,35 @@ static int parse_trace_header(int fd, FILE *fp,
 		goto out;
 	}
 
+	rf = &prf->hdr;
 	if (strcmp(rf->magic, RBTRACE_FHEADER_MAGIC) != 0) {
 		rc = -1;
 		fprintf(stderr, "Invalid header magic!\n");
 		goto out;
 	}
 
-	if ((rf->major != RBTRACE_MAJOR) ||
-	    (rf->minor != RBTRACE_MINOR)) {
+	if ((rf->major > RBTRACE_MAJOR) ||
+	    ((rf->major == RBTRACE_MAJOR) &&
+	     (rf->minor > RBTRACE_MINOR))) {
 		rc = -1;
-		fprintf(stderr, "Revision %d.%d mismatch! %d.%d supported\n",
-			rf->major, rf->minor,
-			RBTRACE_MAJOR, RBTRACE_MINOR);
+		fprintf(stderr, "Revision %d.%d not supported, "
+			"current revision %d.%d\n", rf->major,
+			rf->minor, RBTRACE_MAJOR, RBTRACE_MINOR);
 		goto out;
 	} else {
 		fprintf(fp, "REVISION: %d.%d\n", rf->major, rf->minor);
 	}
 
-	gm = localtime(&rf->timestamp.tv_sec);
+	tv_sec = rf->timestamp.tv_sec + rf->gmtoff;
+	gm = gmtime(&tv_sec);
 	if (gm == NULL) {
 		rc = -1;
 		fprintf(stderr, "Invalid timestamp in trace header!\n");
 	} else {
-		fprintf(fp, "OPEN AT: %02d/%02d %02d:%02d:%02d.%06ld\n",
+		fprintf(fp, "OPEN AT: %02d/%02d %02d:%02d:%02d.%06ld %s\n",
 			gm->tm_mon + 1, gm->tm_mday, gm->tm_hour, gm->tm_min,
-			gm->tm_sec, rf->timestamp.tv_nsec / 1000);
+			gm->tm_sec, rf->timestamp.tv_nsec / 1000,
+			((char *)prf) + rf->tz_off);
 	}
 
 	if (rf->wrap_pos != 0) {
@@ -84,6 +89,7 @@ static void print_trace_summary(int fd, FILE *fp,
 {
 	off_t off = 0;
 	off_t fsize = 0;
+	time_t tv_sec = 0;
 	char buf[128];
 	struct rbtrace_record rr;
 	struct tm *gm = NULL;
@@ -106,7 +112,8 @@ static void print_trace_summary(int fd, FILE *fp,
 		return;
 	}
 
-	gm = localtime(&rr.rr_timestamp.tv_sec);
+	tv_sec = rr.rr_timestamp.tv_sec + prf->hdr.gmtoff;
+	gm = gmtime(&tv_sec);
 	if (gm == NULL) {
 		fprintf(stderr, "invalid timestamp %ld for first trace record!\n",
 			rr.rr_timestamp.tv_sec);
@@ -131,7 +138,8 @@ static void print_trace_summary(int fd, FILE *fp,
 		return;
 	}
 
-	gm = localtime(&rr.rr_timestamp.tv_sec);
+	tv_sec = rr.rr_timestamp.tv_sec + prf->hdr.gmtoff;
+	gm = gmtime(&tv_sec);
 	if (gm == NULL) {
 		fprintf(stderr, "invalid timestamp %ld for last trace record!\n",
 			rr.rr_timestamp.tv_sec);
@@ -161,14 +169,17 @@ static size_t load_trace_page(int fd, uint64_t page_idx,
 	return nbytes;
 }
 
-static bool trace_print_fn(uint64_t idx, FILE *fp,
+static bool trace_print_fn(struct rbtrace_fheader *rf,
+			   uint64_t idx, FILE *fp,
 			   struct rbtrace_record *rr)
 {
 	char record_buf[256];
 	int nchars = 0;
+	time_t tv_sec = 0;
 	struct tm *gm = NULL;
 
-	gm = localtime(&rr->rr_timestamp.tv_sec);
+	tv_sec = rr->rr_timestamp.tv_sec + rf->gmtoff;
+	gm = gmtime(&tv_sec);
 	if (gm == NULL) {
 		fprintf(stderr, "idx:%ld, invalid timestamp %ld\n",
 			idx, rr->rr_timestamp.tv_sec);
@@ -195,7 +206,8 @@ static bool trace_print_fn(uint64_t idx, FILE *fp,
 static void
 parse_trace_file(int fd, FILE *fp,
 		 union padded_rbtrace_fheader *prf,
-		 bool (*parse_fn)(uint64_t idx, FILE *fp,
+		 bool (*parse_fn)(struct rbtrace_fheader *rf,
+				  uint64_t idx, FILE *fp,
 				  struct rbtrace_record *rr))
 {
 	bool again = true;
@@ -206,9 +218,11 @@ parse_trace_file(int fd, FILE *fp,
 	char *page = NULL;
 	off_t off_in_pg = 0;
 	off_t off_in_file = 0;
+	struct rbtrace_fheader *rf = NULL;
 	struct rbtrace_record *rr = NULL;
 	uint64_t cnt = 0;
 
+	rf = &prf->hdr;
 	page_size = sizeof(*rr) * prf->hdr.nr_records;
 	page = malloc(page_size);
 	if (page == NULL) {
@@ -240,7 +254,7 @@ parse_trace_file(int fd, FILE *fp,
 		rr = (struct rbtrace_record *)(page + off_in_pg);
 		while (off_in_pg < nbytes) {
 			/* Parse the trace record */
-			stop = parse_fn(cnt, fp, rr);
+			stop = parse_fn(rf, cnt, fp, rr);
 			cnt++;
 			if (stop) {
 				goto out;
@@ -285,7 +299,7 @@ parse_trace_file(int fd, FILE *fp,
 				/* Done! */
 				goto out;
 			}
-			stop = parse_fn(cnt, fp, rr);
+			stop = parse_fn(rf, cnt, fp, rr);
 			cnt++;
 			if (stop) {
 				goto out;

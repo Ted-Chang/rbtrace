@@ -46,7 +46,9 @@ struct rbtrace_fheader {
 	uint64_t wrap_pos;	// Seek for oldest entry
 	uint64_t hdr_size;	// Size of header
 	uint64_t nr_records;	// Number of records
-	struct timespec timestamp;
+	struct timespec timestamp;// Timestamp when the file was created
+	uint64_t gmtoff;	// GMT time offset in seconds
+	uint32_t tz_off;        // Offset in file to time zone
 	uint32_t name_off;	// Offset in file to ring name
 	uint32_t desc_off;	// Offset in file to ring desc
 };
