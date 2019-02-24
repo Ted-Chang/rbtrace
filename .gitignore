@@ -1,2 +1,11 @@
-*.o
 !.gitignore
+# cscope index
+cscope.out
+# Binary files
+rbtraced
+rbt
+rbtbench
+prbt
+# Generated files
+*.o
+*.a
