@@ -24,8 +24,8 @@ extern "C" {
 struct rbtrace_record {
 	struct timespec rr_timestamp;
 	uint32_t rr_thread;
-	uint16_t rr_cpuid;
-	uint16_t rr_traceid;
+	uint32_t rr_cpuid:8;
+	uint32_t rr_traceid:24;
 	uint64_t rr_a0;
 	uint64_t rr_a1;
 	uint64_t rr_a2;
@@ -59,6 +59,14 @@ union padded_rbtrace_fheader {
 	struct rbtrace_fheader hdr;
 	char pad[RBTRACE_FHEADER_SIZE];
 };
+
+#ifdef RBT_FMT_STR
+const char *rbt_fmt_str[] = {
+	"NULL trace entry\n",
+	"Lost %lld\n",
+	"TEST: OFF %#16llX LEN %#6llx DEV %#4lld OP %04llx\n",
+};
+#endif	/* RBT_FMT_STR */
 
 #ifdef __cplusplus
 }

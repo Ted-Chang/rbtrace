@@ -7,13 +7,16 @@ die()
 }
 
 _pid=$(pidof rbtraced)
-if [ -n $_pid ]; then
+if [ -n $_pid ] && [ ! -z "$_pid" ]; then
     kill $_pid
 fi
 
 ulimit -c unlimited
 
-_pid=$(./rbtraced -d)
+./rbtraced -d
+# sleep a while for rbtraced to get ready
+sleep 2
+_pid=$(pidof rbtraced)
 ./rbt -i
 if [ $? -ne 0 ]; then
     die "rbtraced is not ready yet"

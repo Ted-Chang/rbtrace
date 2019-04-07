@@ -6,8 +6,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#define RBT_FMT_STR
 #include "rbtracedef.h"
+#include "rbtrace.h"
 #include "version.h"
+
+STATIC_ASSERT(sizeof(rbt_fmt_str)/sizeof(rbt_fmt_str[0]) == RBT_LAST);
 
 struct prbt_option {
 	char *file_path;
@@ -82,6 +86,19 @@ static int parse_trace_header(int fd, FILE *fp,
 
  out:
 	return rc;
+}
+
+static void format_trace_record(char *buf, struct rbtrace_record *rr)
+{
+	const char *fmt;
+
+	if (rr->rr_traceid >= RBT_LAST) {
+		sprintf(buf, "invalid-trace-id %d\n", rr->rr_traceid);
+	} else {
+		fmt = rbt_fmt_str[rr->rr_traceid];
+		sprintf(buf, fmt, rr->rr_a0, rr->rr_a1,
+			rr->rr_a2, rr->rr_a3);
+	}
 }
 
 static void print_trace_summary(int fd, FILE *fp,
@@ -159,11 +176,11 @@ static size_t load_trace_page(int fd, uint64_t page_idx,
 	off = sizeof(union padded_rbtrace_fheader) + page_idx * page_size;
 	nbytes = pread(fd, page, page_size, off);
 	if (nbytes == -1) {
-		fprintf(stderr, "pread %zu bytes from off %ld failed, error:%d\n",
-			page_size, off, errno);
+		fprintf(stderr, "pread %zu bytes from off %ld failed, "
+			"error:%d\n", page_size, off, errno);
 	} else if (nbytes % sizeof(struct rbtrace_record)) {
-		fprintf(stderr, "non-aligned trace page, idx %ld, nbytes %zu\n",
-			page_idx, nbytes);
+		fprintf(stderr, "non-aligned trace page, idx %ld, "
+			"nbytes %zu\n",	page_idx, nbytes);
 	}
 
 	return nbytes;
@@ -188,14 +205,14 @@ static bool trace_print_fn(struct rbtrace_fheader *rf,
 
 	/* Format time stamp, cpu and thread ID */
 	nchars = snprintf(record_buf, sizeof(record_buf),
-			  "%02d-%02d %02d:%02d:%02d.%06ld %2d %8d ",
+			  "%02d-%02d %02d:%02d:%02d.%09ld %2d %8d ",
 			  gm->tm_mon + 1, gm->tm_mday, gm->tm_hour,
 			  gm->tm_min, gm->tm_sec,
-			  rr->rr_timestamp.tv_nsec / 1000,
+			  rr->rr_timestamp.tv_nsec,
 			  rr->rr_cpuid, rr->rr_thread);
 
-	sprintf(record_buf + nchars, "%16lX %16lX %16lX %16lX\n",
-		rr->rr_a0, rr->rr_a1, rr->rr_a2, rr->rr_a3);
+	/* Format trace record */
+	format_trace_record(record_buf + nchars, rr);
 
 	fprintf(fp, record_buf);
 
@@ -226,8 +243,8 @@ parse_trace_file(int fd, FILE *fp,
 	page_size = sizeof(*rr) * prf->hdr.nr_records;
 	page = malloc(page_size);
 	if (page == NULL) {
-		fprintf(stderr, "Failed to malloc %zu bytes for trace record!\n",
-			page_size);
+		fprintf(stderr, "Failed to malloc %zu bytes for trace "
+			"record!\n", page_size);
 		goto out;
 	}
 
@@ -244,7 +261,7 @@ parse_trace_file(int fd, FILE *fp,
 		if (nbytes <= 0) {
 			break;
 		} else if (nbytes <= off_in_pg) {
-			fprintf(stderr, "Invalid page_idx(%ld) or off_in_pg(%ld)\n",
+			fprintf(stderr, "Invalid pg_idx(%ld) or off_in_pg(%ld)\n",
 				page_idx, off_in_pg);
 			goto out;
 		} else if (nbytes < page_size) {

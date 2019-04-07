@@ -1,5 +1,5 @@
-#ifndef __RBTRACE_PVT_H__
-#define __RBTRACE_PVT_H__
+#ifndef __RBTRACE_PRIVATE_H__
+#define __RBTRACE_PRIVATE_H__
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -7,10 +7,6 @@
 #include <assert.h>
 #include "rbtrace.h"
 #include "rbtracedef.h"
-
-#ifndef DBG_ASSERT
-#define DBG_ASSERT	assert
-#endif
 
 #ifndef dprintf
 #define dprintf		printf
@@ -102,4 +98,4 @@ void rbtrace_globals_cleanup(bool is_daemon);
 int rbtrace_daemon_init(void);
 void rbtrace_daemon_exit(void);
 
-#endif	/* __RBTRACE_PVT_H__ */
+#endif	/* __RBTRACE_PRIVATE_H__ */

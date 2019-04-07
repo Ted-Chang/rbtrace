@@ -19,6 +19,17 @@
 
 #define SHM_NAME	"rbtbench"
 
+/* Utility macro for tracing */
+#define RBT_TRACE_TEST(_dev_, _op_, _off_, _len_)	\
+	{						\
+		rbtrace(RBTRACE_RING_IO,		\
+			RBT_TRAFFIC_TEST,		\
+			(_off_),			\
+			(_len_),			\
+			(_dev_),			\
+			(_op_));			\
+	}
+
 struct bench_option {
 	int nr_processes;
 	int nr_threads;
@@ -39,10 +50,24 @@ struct bench_context {
 static void do_bench(struct bench_context *ctx)
 {
 	int x;
-	pid_t pid = getpid();
+	int i;
+
+	srand((int)time(NULL));
+
 	while ((x = __sync_add_and_fetch(&ctx->x, 1)) < opts.nr_traces) {
-		rbtrace(RBTRACE_RING_IO, RBT_TRAFFIC_TEST,
-			pid, x, x, x);
+		/* Trace op start */
+		RBT_TRACE_TEST(1, RBT_TRAFFIC_READ_START, x, 512);
+
+		/* Just randomly consume some time between tow trace
+		 * records
+		 */
+		i = rand() % 10000;
+		while (i > 0) {
+			i--;
+		}
+
+		/* Trace op done */
+		RBT_TRACE_TEST(1, RBT_TRAFFIC_READ_DONE, x, 512);
 	}
 }
 
