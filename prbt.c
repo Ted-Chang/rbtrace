@@ -19,12 +19,14 @@ struct prbt_option {
 	time_t start_time;
 	time_t end_time;
 	bool only_show_info;
+	bool show_timestamp;
 } opts = {
 	.file_path = NULL,
 	.out_path = NULL,
 	.start_time = 0,
 	.end_time = 0,
 	.only_show_info = false,
+	.show_timestamp = true,
 };
 
 static void usage(void);
@@ -90,15 +92,21 @@ static int parse_trace_header(int fd, FILE *fp,
 
 static void format_trace_record(char *buf, struct rbtrace_record *rr)
 {
+	int nchars;
 	const char *fmt;
 
 	if (rr->rr_traceid >= RBT_LAST) {
-		sprintf(buf, "invalid-trace-id %d\n", rr->rr_traceid);
+		nchars = sprintf(buf, "ID:%d, %16lX, %16lX, %16lX, %16lX",
+				 rr->rr_traceid, rr->rr_a0, rr->rr_a1,
+				 rr->rr_a2, rr->rr_a3);
 	} else {
 		fmt = rbt_fmt_str[rr->rr_traceid];
-		sprintf(buf, fmt, rr->rr_a0, rr->rr_a1,
-			rr->rr_a2, rr->rr_a3);
+		nchars = sprintf(buf, fmt, rr->rr_a0, rr->rr_a1,
+				 rr->rr_a2, rr->rr_a3);
 	}
+
+	buf += nchars;
+	sprintf(buf, "\n");
 }
 
 static void print_trace_summary(int fd, FILE *fp,
@@ -124,16 +132,16 @@ static void print_trace_summary(int fd, FILE *fp,
 	}
 
 	if (pread(fd, &rr, sizeof(rr), off) != sizeof(rr)) {
-		fprintf(stderr, "pread %ld bytes from off %ld failed, error:%d\n",
-			sizeof(rr), off, errno);
+		fprintf(stderr, "pread %ld bytes from off %ld failed, "
+			"error:%d\n", sizeof(rr), off, errno);
 		return;
 	}
 
 	tv_sec = rr.rr_timestamp.tv_sec + prf->hdr.gmtoff;
 	gm = gmtime(&tv_sec);
 	if (gm == NULL) {
-		fprintf(stderr, "invalid timestamp %ld for first trace record!\n",
-			rr.rr_timestamp.tv_sec);
+		fprintf(stderr, "invalid timestamp %ld for first trace "
+			"record!\n", rr.rr_timestamp.tv_sec);
 		return;
 	}
 
@@ -150,16 +158,16 @@ static void print_trace_summary(int fd, FILE *fp,
 	}
 
 	if (pread(fd, &rr, sizeof(rr), off) != sizeof(rr)) {
-		fprintf(stderr, "pread %ld bytes from off %ld failed, error:%d\n",
-			sizeof(rr), off, errno);
+		fprintf(stderr, "pread %ld bytes from off %ld failed, "
+			"error:%d\n", sizeof(rr), off, errno);
 		return;
 	}
 
 	tv_sec = rr.rr_timestamp.tv_sec + prf->hdr.gmtoff;
 	gm = gmtime(&tv_sec);
 	if (gm == NULL) {
-		fprintf(stderr, "invalid timestamp %ld for last trace record!\n",
-			rr.rr_timestamp.tv_sec);
+		fprintf(stderr, "invalid timestamp %ld for last trace "
+			"record!\n", rr.rr_timestamp.tv_sec);
 		return;
 	}
 
@@ -191,6 +199,7 @@ static bool trace_print_fn(struct rbtrace_fheader *rf,
 			   struct rbtrace_record *rr)
 {
 	char record_buf[256];
+	char *buf = NULL;
 	int nchars = 0;
 	time_t tv_sec = 0;
 	struct tm *gm = NULL;
@@ -203,16 +212,21 @@ static bool trace_print_fn(struct rbtrace_fheader *rf,
 		goto out;
 	}
 
-	/* Format time stamp, cpu and thread ID */
-	nchars = snprintf(record_buf, sizeof(record_buf),
-			  "%02d-%02d %02d:%02d:%02d.%09ld %2d %8d ",
-			  gm->tm_mon + 1, gm->tm_mday, gm->tm_hour,
-			  gm->tm_min, gm->tm_sec,
-			  rr->rr_timestamp.tv_nsec,
-			  rr->rr_cpuid, rr->rr_thread);
+	buf = record_buf;
+	if (opts.show_timestamp) {
+		/* Format time stamp, cpu and thread ID */
+		nchars = sprintf(buf, "%02d-%02d %02d:%02d:%02d.%09ld ",
+				 gm->tm_mon + 1, gm->tm_mday, gm->tm_hour,
+				 gm->tm_min, gm->tm_sec,
+				 rr->rr_timestamp.tv_nsec);
+		buf += nchars;
+	}
+
+	nchars = sprintf(buf, "%2d %8d ", rr->rr_cpuid, rr->rr_thread);
+	buf += nchars;
 
 	/* Format trace record */
-	format_trace_record(record_buf + nchars, rr);
+	format_trace_record(buf, rr);
 
 	fprintf(fp, record_buf);
 

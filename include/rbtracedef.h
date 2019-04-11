@@ -62,9 +62,9 @@ union padded_rbtrace_fheader {
 
 #ifdef RBT_FMT_STR
 const char *rbt_fmt_str[] = {
-	"NULL trace entry\n",
-	"Lost %lld\n",
-	"TEST: OFF %#16llX LEN %#6llx DEV %#4lld OP %04llx\n",
+	"NULL trace entry",
+	"Lost %lld",
+	"TEST: OFF %#16llX LEN %#6llx DEV %#4d OP %04x",
 };
 #endif	/* RBT_FMT_STR */
 
