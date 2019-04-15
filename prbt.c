@@ -6,11 +6,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
-#define RBT_FMT_STR
+#define RBT_STR
 #include "rbtracedef.h"
 #include "rbtrace.h"
 #include "version.h"
 
+STATIC_ASSERT(sizeof(rbt_tid_str)/sizeof(rbt_tid_str[0]) == RBT_LAST);
 STATIC_ASSERT(sizeof(rbt_fmt_str)/sizeof(rbt_fmt_str[0]) == RBT_LAST);
 
 struct prbt_option {
@@ -20,6 +21,7 @@ struct prbt_option {
 	time_t end_time;
 	bool only_show_info;
 	bool show_timestamp;
+	uint64_t trace_ids;
 } opts = {
 	.file_path = NULL,
 	.out_path = NULL,
@@ -27,6 +29,7 @@ struct prbt_option {
 	.end_time = 0,
 	.only_show_info = false,
 	.show_timestamp = true,
+	.trace_ids = 0xFFFFFFFFFFFFFFFF,
 };
 
 static void usage(void);
@@ -90,22 +93,28 @@ static int parse_trace_header(int fd, FILE *fp,
 	return rc;
 }
 
-static void format_trace_record(char *buf, struct rbtrace_record *rr)
+static void format_trace_record(char *buf, struct rbtrace_entry *re)
 {
 	int nchars;
 	const char *fmt;
+	const char *tid;
 
-	if (rr->rr_traceid >= RBT_LAST) {
+	if (re->traceid >= RBT_LAST) {
 		nchars = sprintf(buf, "ID:%d, %16lX, %16lX, %16lX, %16lX",
-				 rr->rr_traceid, rr->rr_a0, rr->rr_a1,
-				 rr->rr_a2, rr->rr_a3);
+				 re->traceid, re->a0, re->a1,
+				 re->a2, re->a3);
+		buf += nchars;
 	} else {
-		fmt = rbt_fmt_str[rr->rr_traceid];
-		nchars = sprintf(buf, fmt, rr->rr_a0, rr->rr_a1,
-				 rr->rr_a2, rr->rr_a3);
+		tid = rbt_tid_str[re->traceid];
+		nchars = sprintf(buf, "%s: ", tid);
+		buf += nchars;
+
+		fmt = rbt_fmt_str[re->traceid];
+		nchars = sprintf(buf, fmt, re->a0, re->a1,
+				 re->a2, re->a3);
+		buf += nchars;
 	}
 
-	buf += nchars;
 	sprintf(buf, "\n");
 }
 
@@ -116,11 +125,11 @@ static void print_trace_summary(int fd, FILE *fp,
 	off_t fsize = 0;
 	time_t tv_sec = 0;
 	char buf[128];
-	struct rbtrace_record rr;
+	struct rbtrace_entry re;
 	struct tm *gm = NULL;
 
 	fsize = lseek(fd, 0, SEEK_END);
-	if (fsize < (sizeof(*prf) + sizeof(rr))) {
+	if (fsize < (sizeof(*prf) + sizeof(re))) {
 		fprintf(stderr, "Empty trace file!\n");
 		return;
 	}
@@ -131,17 +140,17 @@ static void print_trace_summary(int fd, FILE *fp,
 		off = sizeof(*prf);
 	}
 
-	if (pread(fd, &rr, sizeof(rr), off) != sizeof(rr)) {
+	if (pread(fd, &re, sizeof(re), off) != sizeof(re)) {
 		fprintf(stderr, "pread %ld bytes from off %ld failed, "
-			"error:%d\n", sizeof(rr), off, errno);
+			"error:%d\n", sizeof(re), off, errno);
 		return;
 	}
 
-	tv_sec = rr.rr_timestamp.tv_sec + prf->hdr.gmtoff;
+	tv_sec = re.timestamp.tv_sec + prf->hdr.gmtoff;
 	gm = gmtime(&tv_sec);
 	if (gm == NULL) {
 		fprintf(stderr, "invalid timestamp %ld for first trace "
-			"record!\n", rr.rr_timestamp.tv_sec);
+			"record!\n", re.timestamp.tv_sec);
 		return;
 	}
 
@@ -149,25 +158,25 @@ static void print_trace_summary(int fd, FILE *fp,
 	fprintf(fp, "start time: %s\n", buf);
 
 	/* Wrapped file, last trace record is just before current one */
-	if (off >= (sizeof(*prf) + sizeof(rr))) {
-		off -= sizeof(rr);
+	if (off >= (sizeof(*prf) + sizeof(re))) {
+		off -= sizeof(re);
 	}
 	/* Last trace record is at file end */
 	else {
-		off = fsize - sizeof(rr);
+		off = fsize - sizeof(re);
 	}
 
-	if (pread(fd, &rr, sizeof(rr), off) != sizeof(rr)) {
+	if (pread(fd, &re, sizeof(re), off) != sizeof(re)) {
 		fprintf(stderr, "pread %ld bytes from off %ld failed, "
-			"error:%d\n", sizeof(rr), off, errno);
+			"error:%d\n", sizeof(re), off, errno);
 		return;
 	}
 
-	tv_sec = rr.rr_timestamp.tv_sec + prf->hdr.gmtoff;
+	tv_sec = re.timestamp.tv_sec + prf->hdr.gmtoff;
 	gm = gmtime(&tv_sec);
 	if (gm == NULL) {
 		fprintf(stderr, "invalid timestamp %ld for last trace "
-			"record!\n", rr.rr_timestamp.tv_sec);
+			"record!\n", re.timestamp.tv_sec);
 		return;
 	}
 
@@ -186,7 +195,7 @@ static size_t load_trace_page(int fd, uint64_t page_idx,
 	if (nbytes == -1) {
 		fprintf(stderr, "pread %zu bytes from off %ld failed, "
 			"error:%d\n", page_size, off, errno);
-	} else if (nbytes % sizeof(struct rbtrace_record)) {
+	} else if (nbytes % sizeof(struct rbtrace_entry)) {
 		fprintf(stderr, "non-aligned trace page, idx %ld, "
 			"nbytes %zu\n",	page_idx, nbytes);
 	}
@@ -196,7 +205,7 @@ static size_t load_trace_page(int fd, uint64_t page_idx,
 
 static bool trace_print_fn(struct rbtrace_fheader *rf,
 			   uint64_t idx, FILE *fp,
-			   struct rbtrace_record *rr)
+			   struct rbtrace_entry *re)
 {
 	char record_buf[256];
 	char *buf = NULL;
@@ -204,11 +213,11 @@ static bool trace_print_fn(struct rbtrace_fheader *rf,
 	time_t tv_sec = 0;
 	struct tm *gm = NULL;
 
-	tv_sec = rr->rr_timestamp.tv_sec + rf->gmtoff;
+	tv_sec = re->timestamp.tv_sec + rf->gmtoff;
 	gm = gmtime(&tv_sec);
 	if (gm == NULL) {
 		fprintf(stderr, "idx:%ld, invalid timestamp %ld\n",
-			idx, rr->rr_timestamp.tv_sec);
+			idx, re->timestamp.tv_sec);
 		goto out;
 	}
 
@@ -218,15 +227,15 @@ static bool trace_print_fn(struct rbtrace_fheader *rf,
 		nchars = sprintf(buf, "%02d-%02d %02d:%02d:%02d.%09ld ",
 				 gm->tm_mon + 1, gm->tm_mday, gm->tm_hour,
 				 gm->tm_min, gm->tm_sec,
-				 rr->rr_timestamp.tv_nsec);
+				 re->timestamp.tv_nsec);
 		buf += nchars;
 	}
 
-	nchars = sprintf(buf, "%2d %8d ", rr->rr_cpuid, rr->rr_thread);
+	nchars = sprintf(buf, "%2d %8d ", re->cpuid, re->thread);
 	buf += nchars;
 
 	/* Format trace record */
-	format_trace_record(buf, rr);
+	format_trace_record(buf, re);
 
 	fprintf(fp, record_buf);
 
@@ -237,9 +246,9 @@ static bool trace_print_fn(struct rbtrace_fheader *rf,
 static void
 parse_trace_file(int fd, FILE *fp,
 		 union padded_rbtrace_fheader *prf,
-		 bool (*parse_fn)(struct rbtrace_fheader *rf,
-				  uint64_t idx, FILE *fp,
-				  struct rbtrace_record *rr))
+		 bool (*parse_fn)(struct rbtrace_fheader *,
+				  uint64_t, FILE *,
+				  struct rbtrace_entry *))
 {
 	bool again = true;
 	bool stop = false;
@@ -250,11 +259,11 @@ parse_trace_file(int fd, FILE *fp,
 	off_t off_in_pg = 0;
 	off_t off_in_file = 0;
 	struct rbtrace_fheader *rf = NULL;
-	struct rbtrace_record *rr = NULL;
+	struct rbtrace_entry *re = NULL;
 	uint64_t cnt = 0;
 
 	rf = &prf->hdr;
-	page_size = sizeof(*rr) * prf->hdr.nr_records;
+	page_size = sizeof(*re) * prf->hdr.nr_records;
 	page = malloc(page_size);
 	if (page == NULL) {
 		fprintf(stderr, "Failed to malloc %zu bytes for trace "
@@ -282,16 +291,16 @@ parse_trace_file(int fd, FILE *fp,
 			again = false;
 		}
 
-		rr = (struct rbtrace_record *)(page + off_in_pg);
+		re = (struct rbtrace_entry *)(page + off_in_pg);
 		while (off_in_pg < nbytes) {
 			/* Parse the trace record */
-			stop = parse_fn(rf, cnt, fp, rr);
+			stop = parse_fn(rf, cnt, fp, re);
 			cnt++;
 			if (stop) {
 				goto out;
 			}
-			rr++;
-			off_in_pg += sizeof(*rr);
+			re++;
+			off_in_pg += sizeof(*re);
 		}
 
 		page_idx++;
@@ -321,7 +330,7 @@ parse_trace_file(int fd, FILE *fp,
 			again = false;
 		}
 
-		rr = (struct rbtrace_record *)(page + off_in_pg);
+		re = (struct rbtrace_entry *)(page + off_in_pg);
 		while (off_in_pg < nbytes) {
 			off_in_file = sizeof(*prf) +
 				page_idx * page_size +
@@ -330,13 +339,13 @@ parse_trace_file(int fd, FILE *fp,
 				/* Done! */
 				goto out;
 			}
-			stop = parse_fn(rf, cnt, fp, rr);
+			stop = parse_fn(rf, cnt, fp, re);
 			cnt++;
 			if (stop) {
 				goto out;
 			}
-			rr++;
-			off_in_pg += sizeof(*rr);
+			re++;
+			off_in_pg += sizeof(*re);
 		}
 
 		page_idx++;
@@ -358,7 +367,7 @@ int main(int argc, char *argv[])
 	FILE *fp = NULL;
 	struct tm time;
 
-	while ((ch = getopt(argc, argv, "f:o:s:e:Ivh")) != -1) {
+	while ((ch = getopt(argc, argv, "f:o:s:e:i:Ivh")) != -1) {
 		switch (ch) {
 		case 'f':
 			opts.file_path = optarg;
@@ -390,6 +399,8 @@ int main(int argc, char *argv[])
 			break;
 		case 'I':
 			opts.only_show_info = true;
+			break;
+		case 'i':
 			break;
 		case 'v':
 			version();
@@ -450,8 +461,11 @@ static void usage(void)
 	       "       [-f <trace-file>]  Specify trace file path\n"
 	       "       [-o <output-file>] Specify output file path\n"
 	       "       [-I]               Only show trace file info\n"
+	       "       [-i <trace-ids>]   Specify trace ids included\n"
 	       "       [-v]               Display version information\n"
-	       "       [-h]               Display this help message\n");
+	       "       [-h]               Display this help message\n\n"
+	       "e.g.   ./prbt -f test.rbt.0 -o test.txt -I\n"
+	       "       ./prbt -f test.rbt.0 -i all\n");
 }
 
 static void version(void)

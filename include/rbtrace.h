@@ -37,7 +37,7 @@ typedef enum rbtrace_ring {
 #define RBT_TRAFFIC_WRITE_START	(RBT_WRITE|RBT_START)
 #define RBT_TRAFFIC_WRITE_DONE	(RBT_WRITE|RBT_DONE)
 
-extern int rbtrace(rbtrace_ring_t ring, uint16_t traceid, uint64_t a0,
+extern int rbtrace(rbtrace_ring_t ring, uint8_t traceid, uint64_t a0,
 		   uint64_t a1, uint64_t a2, uint64_t a3);
 extern inline int rbtrace_traffic_enabled(rbtrace_ring_t ring,
 					  uint16_t traceid);

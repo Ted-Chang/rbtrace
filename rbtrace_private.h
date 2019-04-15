@@ -55,7 +55,7 @@ struct rbtrace_global_data {
 	uint64_t *fsize_ptr;
 	rbtrace_ring_t *ring_ptr;
 	struct rbtrace_info *ri_ptr;
-	struct rbtrace_record *rr_base;
+	struct rbtrace_entry *rr_base;
 };
 
 extern struct rbtrace_global_data rbt_globals;

@@ -20,16 +20,17 @@ extern "C" {
 #define RBTRACE_MAX_NAME	(64)
 #define RBTRACE_MAX_DESC	(128)
 
-/* Format of a trace record */
-struct rbtrace_record {
-	struct timespec rr_timestamp;
-	uint32_t rr_thread;
-	uint32_t rr_cpuid:8;
-	uint32_t rr_traceid:24;
-	uint64_t rr_a0;
-	uint64_t rr_a1;
-	uint64_t rr_a2;
-	uint64_t rr_a3;
+/* Format of a trace entry */
+struct rbtrace_entry {
+	struct timespec timestamp;
+	uint32_t cpuid:8;
+	uint32_t thread:24;
+	uint32_t traceid:6;
+	uint32_t reserved:26;
+	uint64_t a0;
+	uint64_t a1;
+	uint64_t a2;
+	uint64_t a3;
 };
 
 #define RBTRACE_FHEADER_MAGIC	"RBTRACE"
@@ -60,13 +61,18 @@ union padded_rbtrace_fheader {
 	char pad[RBTRACE_FHEADER_SIZE];
 };
 
-#ifdef RBT_FMT_STR
+#ifdef RBT_STR
+const char *rbt_tid_str[] = {
+	"NULL",
+	"LOST",
+	"TEST",
+};
 const char *rbt_fmt_str[] = {
 	"NULL trace entry",
 	"Lost %lld",
-	"TEST: OFF %#16llX LEN %#6llx DEV %#4d OP %04x",
+	"OFF %#16llX LEN %#6llx DEV %#4d OP %04x",
 };
-#endif	/* RBT_FMT_STR */
+#endif	/* RBT_STR */
 
 #ifdef __cplusplus
 }

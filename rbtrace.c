@@ -21,6 +21,9 @@
 #define pause()	__asm __volatile("pause\n": : : "memory")
 #endif
 
+/* For now we only support 32 trace IDs */
+STATIC_ASSERT(RBT_LAST < 64);
+
 #define RBTRACE_IO_RING_SIZE	(64*1024)
 
 struct rbtrace_config rbt_cfgs[] = {
@@ -56,10 +59,10 @@ void rbtrace_signal_thread(struct rbtrace_info *ri)
 	}
 }
 
-static struct rbtrace_record *
+static struct rbtrace_entry *
 ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 {
-	struct rbtrace_record *rr;
+	struct rbtrace_entry *re;
 	int lost;
 
 	if (slot == ri->ri_size) {
@@ -104,12 +107,12 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 		}
 		slot = __sync_add_and_fetch(&ri->ri_slot, 1);
 		if (slot < ri->ri_size) {
-			rr = ((struct rbtrace_record *)
+			re = ((struct rbtrace_entry *)
 			      (rbt_globals.rr_base + ri->ri_cir_off)) + slot;
-			clock_gettime(CLOCK_REALTIME, &rr->rr_timestamp);
-			rr->rr_cpuid = (uint16_t)sched_getcpu();
-			rr->rr_thread = gettid();
-			return rr;
+			clock_gettime(CLOCK_REALTIME, &re->timestamp);
+			re->cpuid = (uint16_t)sched_getcpu();
+			re->thread = gettid();
+			return re;
 		}
 
 		__sync_add_and_fetch(&ri->ri_lost, 1);
@@ -120,12 +123,12 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 
 	slot = __sync_add_and_fetch(&ri->ri_slot, 1);
 	if (slot < ri->ri_size) {
-		rr = ((struct rbtrace_record *)
+		re = ((struct rbtrace_entry *)
 		      (rbt_globals.rr_base + ri->ri_cir_off)) + slot;
-		clock_gettime(CLOCK_REALTIME, &rr->rr_timestamp);
-		rr->rr_cpuid = (uint16_t)sched_getcpu();
-		rr->rr_thread = gettid();
-		return rr;
+		clock_gettime(CLOCK_REALTIME, &re->timestamp);
+		re->cpuid = (uint16_t)sched_getcpu();
+		re->thread = gettid();
+		return re;
 	}
 
 	__sync_val_compare_and_swap(&ri->ri_slot, slot, -1);
@@ -134,30 +137,30 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 	return NULL;
 }
 
-static struct rbtrace_record *
+static struct rbtrace_entry *
 ringwrap(struct rbtrace_info *ri)
 {
 	uint32_t slot;
-	struct rbtrace_record *rr;
+	struct rbtrace_entry *re;
 
 	slot = __sync_add_and_fetch(&ri->ri_slot, 1);
 	if (slot < ri->ri_size) {
-		rr = ((struct rbtrace_record *)
+		re = ((struct rbtrace_entry *)
 		      (rbt_globals.rr_base + ri->ri_cir_off)) + slot;
-		clock_gettime(CLOCK_REALTIME, &rr->rr_timestamp);
-		rr->rr_cpuid = (uint16_t)sched_getcpu();
-		rr->rr_thread = gettid();
-		return rr;
+		clock_gettime(CLOCK_REALTIME, &re->timestamp);
+		re->cpuid = (uint16_t)sched_getcpu();
+		re->thread = gettid();
+		return re;
 	}
 
 	return ringwrap_slot(ri, slot);
 }
 
-int rbtrace(rbtrace_ring_t ring, uint16_t traceid, uint64_t a0,
+int rbtrace(rbtrace_ring_t ring, uint8_t traceid, uint64_t a0,
 	    uint64_t a1, uint64_t a2, uint64_t a3)
 {
 	struct rbtrace_info *ri;
-	struct rbtrace_record *rr;
+	struct rbtrace_entry *re;
 
 	if ((ring >= RBTRACE_RING_MAX) ||
 	    (NULL == rbt_globals.ri_ptr)) {
@@ -165,15 +168,15 @@ int rbtrace(rbtrace_ring_t ring, uint16_t traceid, uint64_t a0,
 	}
 
 	ri = rbt_globals.ri_ptr + ring;
-	rr = ringwrap(ri);
-	if (rr == NULL) {
+	re = ringwrap(ri);
+	if (re == NULL) {
 		return -1;
 	} else {
-		rr->rr_traceid = traceid;
-		rr->rr_a0 = a0;
-		rr->rr_a1 = a1;
-		rr->rr_a2 = a2;
-		rr->rr_a3 = a3;
+		re->traceid = traceid;
+		re->a0 = a0;
+		re->a1 = a1;
+		re->a2 = a2;
+		re->a3 = a3;
 	}
 
 	return 0;
@@ -195,7 +198,7 @@ static size_t rbtrace_calc_ring_size(struct rbtrace_config *cfg)
 	size_t size = 0;
 
 	/* Double ring buffer */
-	size = cfg->rc_size * sizeof(struct rbtrace_record) * 2;
+	size = cfg->rc_size * sizeof(struct rbtrace_entry) * 2;
 	return size;
 }
 
@@ -233,7 +236,7 @@ void rbtrace_globals_init(int shm_fd, char *shm_base,
 	offset += sizeof(rbtrace_ring_t);
 	rbt_globals.ri_ptr = (struct rbtrace_info *)(shm_base + offset);
 	offset += sizeof(struct rbtrace_info) * RBTRACE_RING_MAX;
-	rbt_globals.rr_base = (struct rbtrace_record *)(shm_base + offset);
+	rbt_globals.rr_base = (struct rbtrace_entry *)(shm_base + offset);
 
 	rbt_globals.inited = true;
 }

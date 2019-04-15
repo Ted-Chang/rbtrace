@@ -155,7 +155,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 
 	if (do_flush) {
 		buf = (char *)(rbt_globals.rr_base + ri->ri_cir_off);
-		buf_size = (ri->ri_slot + 1) * sizeof(struct rbtrace_record);
+		buf_size = (ri->ri_slot + 1) * sizeof(struct rbtrace_entry);
 	} else {
 		buf = (char *)(rbt_globals.rr_base + ri->ri_alt_off);
 		buf_size = ri->ri_data_size;
@@ -303,7 +303,7 @@ static size_t rbtrace_init_trace_info(struct rbtrace_config *cfg,
 	ri->ri_size = cfg->rc_size;
 	ri->ri_flags = cfg->rc_flags;
 	ri->ri_tflags = 0;
-	ri->ri_data_size = ri->ri_size * sizeof(struct rbtrace_record);
+	ri->ri_data_size = ri->ri_size * sizeof(struct rbtrace_entry);
 	ri->ri_cir_off = offset;
 	ri->ri_alt_off = ri->ri_cir_off + ri->ri_size;
 
