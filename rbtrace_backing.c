@@ -154,10 +154,10 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	prf = &rbt_hdrs[ring];
 
 	if (do_flush) {
-		buf = (char *)(rbt_globals.rr_base + ri->ri_cir_off);
+		buf = (char *)(rbt_globals.re_base + ri->ri_cir_off);
 		buf_size = (ri->ri_slot + 1) * sizeof(struct rbtrace_entry);
 	} else {
-		buf = (char *)(rbt_globals.rr_base + ri->ri_alt_off);
+		buf = (char *)(rbt_globals.re_base + ri->ri_alt_off);
 		buf_size = ri->ri_data_size;
 	}
 

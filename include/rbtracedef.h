@@ -63,12 +63,10 @@ union padded_rbtrace_fheader {
 
 #ifdef RBT_STR
 const char *rbt_tid_str[] = {
-	"NULL",
 	"LOST",
 	"TEST",
 };
 const char *rbt_fmt_str[] = {
-	"NULL trace entry",
 	"Lost %lld",
 	"OFF %#16llX LEN %#6llx DEV %#4d OP %04x",
 };

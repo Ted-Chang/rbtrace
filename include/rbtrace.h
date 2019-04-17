@@ -14,9 +14,8 @@ typedef enum rbtrace_ring {
 
 /* ring buffer trace ID
  */
-#define RBT_NULL		0x0000
-#define RBT_LOST		0x0001
-#define RBT_TRAFFIC_TEST	0x0002
+#define RBT_LOST		0x0000
+#define RBT_TRAFFIC_TEST	0x0001
 #define RBT_LAST		(RBT_TRAFFIC_TEST+1)
 
 /* Operation types, all types should be even
@@ -40,7 +39,7 @@ typedef enum rbtrace_ring {
 extern int rbtrace(rbtrace_ring_t ring, uint8_t traceid, uint64_t a0,
 		   uint64_t a1, uint64_t a2, uint64_t a3);
 extern inline int rbtrace_traffic_enabled(rbtrace_ring_t ring,
-					  uint16_t traceid);
+					  uint8_t traceid);
 extern int rbtrace_init(void);
 extern void rbtrace_exit(void);
 

@@ -7,7 +7,7 @@ die()
 }
 
 _pid=$(pidof rbtraced)
-if [ -n $_pid ] && [ ! -z "$_pid" ]; then
+if [[ -n $_pid && ! -z "$_pid" ]]; then
     kill $_pid
 fi
 

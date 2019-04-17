@@ -47,7 +47,7 @@ struct rbtrace_global_data rbt_globals = {
 	.fsize_ptr = NULL,
 	.ring_ptr = NULL,
 	.ri_ptr = NULL,
-	.rr_base = NULL,
+	.re_base = NULL,
 };
 
 void rbtrace_signal_thread(struct rbtrace_info *ri)
@@ -108,7 +108,7 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 		slot = __sync_add_and_fetch(&ri->ri_slot, 1);
 		if (slot < ri->ri_size) {
 			re = ((struct rbtrace_entry *)
-			      (rbt_globals.rr_base + ri->ri_cir_off)) + slot;
+			      (rbt_globals.re_base + ri->ri_cir_off)) + slot;
 			clock_gettime(CLOCK_REALTIME, &re->timestamp);
 			re->cpuid = (uint16_t)sched_getcpu();
 			re->thread = gettid();
@@ -124,7 +124,7 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 	slot = __sync_add_and_fetch(&ri->ri_slot, 1);
 	if (slot < ri->ri_size) {
 		re = ((struct rbtrace_entry *)
-		      (rbt_globals.rr_base + ri->ri_cir_off)) + slot;
+		      (rbt_globals.re_base + ri->ri_cir_off)) + slot;
 		clock_gettime(CLOCK_REALTIME, &re->timestamp);
 		re->cpuid = (uint16_t)sched_getcpu();
 		re->thread = gettid();
@@ -146,7 +146,7 @@ ringwrap(struct rbtrace_info *ri)
 	slot = __sync_add_and_fetch(&ri->ri_slot, 1);
 	if (slot < ri->ri_size) {
 		re = ((struct rbtrace_entry *)
-		      (rbt_globals.rr_base + ri->ri_cir_off)) + slot;
+		      (rbt_globals.re_base + ri->ri_cir_off)) + slot;
 		clock_gettime(CLOCK_REALTIME, &re->timestamp);
 		re->cpuid = (uint16_t)sched_getcpu();
 		re->thread = gettid();
@@ -182,7 +182,7 @@ int rbtrace(rbtrace_ring_t ring, uint8_t traceid, uint64_t a0,
 	return 0;
 }
 
-inline int rbtrace_traffic_enabled(rbtrace_ring_t ring, uint16_t traceid)
+inline int rbtrace_traffic_enabled(rbtrace_ring_t ring, uint8_t traceid)
 {
 	if ((ring >= RBTRACE_RING_MAX) ||
 	    (traceid >= RBT_LAST) ||
@@ -236,7 +236,7 @@ void rbtrace_globals_init(int shm_fd, char *shm_base,
 	offset += sizeof(rbtrace_ring_t);
 	rbt_globals.ri_ptr = (struct rbtrace_info *)(shm_base + offset);
 	offset += sizeof(struct rbtrace_info) * RBTRACE_RING_MAX;
-	rbt_globals.rr_base = (struct rbtrace_entry *)(shm_base + offset);
+	rbt_globals.re_base = (struct rbtrace_entry *)(shm_base + offset);
 
 	rbt_globals.inited = true;
 }
