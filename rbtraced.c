@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <pthread.h>
 #include "rbtrace.h"
 #include "rbtracedef.h"
 #include "rbtrace_private.h"
@@ -124,10 +125,7 @@ int main(int argc, char *argv[])
 		goto out;
 	}
 
-	while (!server.terminate) {
-		sleep(1);
-	}
-
+	pthread_exit(NULL);
  out:
 	return rc;
 }

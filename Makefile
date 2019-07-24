@@ -26,3 +26,6 @@ test_segfault:
 
 clean:
 	rm -rf *.o librbtrace.a rbt prbt rbtraced rbtbench test_segfault
+
+check:
+	./autotest.sh

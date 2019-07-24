@@ -21,6 +21,7 @@ STATIC_ASSERT(sizeof(struct rbtrace_fheader) < RBTRACE_FHEADER_SIZE);
 
 struct rbtrace_thread_data {
 	pthread_t thread;
+	sem_t sem;
 	bool inited;
 	bool terminate;
 } rbt_thread = {
@@ -232,8 +233,12 @@ static void *rbtrace_thread_fn(void *arg)
 	rbtrace_ring_t ring;
 	struct timespec wait_ts;
 	struct rbtrace_info *ri = NULL;
+	struct rbtrace_thread_data *thread = NULL;
 
-	while (!rbt_thread.terminate) {
+	thread = (struct rbtrace_thread_data *)arg;
+	sem_post(&thread->sem);
+
+	while (!thread->terminate) {
 		clock_gettime(CLOCK_REALTIME, &wait_ts);
 		wait_ts.tv_sec += RBTRACE_THREAD_WAIT_SECS;
 		rc = sem_timedwait(rbt_globals.sem_ptr, &wait_ts);
@@ -367,8 +372,9 @@ int rbtrace_daemon_init(void)
 		rbt_fds[i] = -1;
 	}
 
+	sem_init(&rbt_thread.sem, 0, 0);
 	rc = pthread_create(&rbt_thread.thread, NULL,
-			    rbtrace_thread_fn, NULL);
+			    rbtrace_thread_fn, &rbt_thread);
 	if (rc != 0) {
 		goto pthread_fail;
 	}
@@ -378,6 +384,9 @@ int rbtrace_daemon_init(void)
 	if (rc != 0) {
 		/* Non-fatal error, go on working */
 	}
+
+	sem_wait(&rbt_thread.sem);
+	sem_destroy(&rbt_thread.sem);
 
 	return 0;
 
