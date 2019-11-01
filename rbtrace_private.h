@@ -87,8 +87,7 @@ struct rbtrace_op_info_arg {
 
 typedef int (*rbtrace_op_handler)(struct rbtrace_info *ri, void *argp);
 
-int rbtrace_ctrl(rbtrace_ring_t ring, rbtrace_op_t op,
-		 void *argp);
+int rbtrace_ctrl(rbtrace_ring_t ring, rbtrace_op_t op, void *argp);
 size_t rbtrace_calc_shm_size(void);
 void rbtrace_signal_thread(struct rbtrace_info *ri);
 void rbtrace_globals_init(int fd, char *shm_base,
@@ -97,5 +96,6 @@ void rbtrace_globals_init(int fd, char *shm_base,
 void rbtrace_globals_cleanup(bool is_daemon);
 int rbtrace_daemon_init(void);
 void rbtrace_daemon_exit(void);
+void rbtrace_daemon_join(void);
 
 #endif	/* __RBTRACE_PRIVATE_H__ */

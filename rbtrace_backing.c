@@ -348,6 +348,7 @@ int rbtrace_daemon_init(void)
 	rc = mlock(shm_base, shm_size);
 	if (rc == -1) {
 		/* Failed to lock memory, but it's non-fatal error */
+		dprintf("mlock failed\n");
 	}
 	memset(shm_base, 0, shm_size);
 
@@ -383,6 +384,7 @@ int rbtrace_daemon_init(void)
 				RBTRACE_THREAD_NAME);
 	if (rc != 0) {
 		/* Non-fatal error, go on working */
+		dprintf("set rbt thread name failed\n");
 	}
 
 	sem_wait(&rbt_thread.sem);
@@ -415,9 +417,6 @@ void rbtrace_daemon_exit(void)
 		rbt_thread.inited = false;
 	}
 
-	/* Cleanup global data */
-	rbtrace_globals_cleanup(true);
-
 	/* Close all fds */
 	for (i = 0; i < RBTRACE_RING_MAX; i++) {
 		if (rbt_fds[i] != -1) {
@@ -425,6 +424,14 @@ void rbtrace_daemon_exit(void)
 			rbt_fds[i] = -1;
 		}
 	}
+
+	/* Cleanup global data */
+	rbtrace_globals_cleanup(true);
+}
+
+void rbtrace_daemon_join(void)
+{
+	pthread_join(rbt_thread.thread, NULL);
 }
 
 static int rbtrace_ctrl_open(struct rbtrace_info *ri, void *argp)
@@ -575,8 +582,7 @@ rbtrace_op_handler rbt_ops[] = {
 
 STATIC_ASSERT(sizeof(rbt_ops)/sizeof(rbt_ops[0]) == RBTRACE_OP_MAX);
 
-int rbtrace_ctrl(rbtrace_ring_t ring, rbtrace_op_t op,
-		 void *argp)
+int rbtrace_ctrl(rbtrace_ring_t ring, rbtrace_op_t op, void *argp)
 {
 	int rc = 0;
 	struct rbtrace_info *ri;

@@ -17,12 +17,12 @@ struct rbtrace_server {
 	char *pidfile;
 	char *logfile;
 	bool daemonize;
-	bool terminate;
+	volatile int terminate;
 } server = {
 	.pidfile = RBTRACED_DFT_PID_FILE,
 	.logfile = RBTRACED_DFT_LOG_FILE,
 	.daemonize = false,
-	.terminate = false
+	.terminate = 0,
 };
 
 static void usage(void);
@@ -36,12 +36,12 @@ static void sig_handler(const int sig)
 		return;
 	}
 
-	rbtrace_daemon_exit();
-	if (server.pidfile) {
-		unlink(server.pidfile);
+	if (__sync_add_and_fetch(&server.terminate, 1) == 1) {
+		rbtrace_daemon_exit();
+		if (server.pidfile) {
+			unlink(server.pidfile);
+		}
 	}
-
-	server.terminate = true;
 }
 
 static void daemonize(void)
@@ -125,7 +125,8 @@ int main(int argc, char *argv[])
 		goto out;
 	}
 
-	pthread_exit(NULL);
+	rbtrace_daemon_join();
+	
  out:
 	return rc;
 }
