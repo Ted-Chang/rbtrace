@@ -68,7 +68,7 @@ static void daemonize(void)
 static void create_pid_file(void)
 {
 	int fd = NULL;
-	char buf[64];
+	char buf[256];
 
 	if (server.pidfile == NULL) {
 		server.pidfile = RBTRACED_DFT_PID_FILE;
@@ -76,12 +76,14 @@ static void create_pid_file(void)
 	fd = open(server.pidfile, O_RDWR|O_CREAT, 0660);
 	if (fd < 0) {
 		fprintf(stderr, "open pid file:%s failed, %s\n",
-			server.pidfile, strerror(errno));
+			server.pidfile,
+			strerror_r(errno, buf, sizeof(buf)));
 		exit(1);
 	}
 	if (lockf(fd, F_TLOCK, 0) < 0) {
 		fprintf(stderr, "lock pid file:%s failed, %s\n",
-			server.pidfile, strerror(errno));
+			server.pidfile,
+			strerror_r(errno, buf, sizeof(buf)));
 		exit(0);
 	}
 	sprintf(buf, "%d\n", getpid());

@@ -323,6 +323,10 @@ int rbtrace_daemon_init(void)
 	sem_t *sem_ptr = SEM_FAILED;
 	int i;
 
+	/* Cleanup garbage of previous run */
+	shm_unlink(RBTRACE_SHM_NAME);
+	sem_unlink(RBTRACE_SEM_NAME);
+
 	shm_size = rbtrace_calc_shm_size();
 
 	/* Create shared memory for ring buffer */
@@ -346,7 +350,7 @@ int rbtrace_daemon_init(void)
 	rc = mlock(shm_base, shm_size);
 	if (rc == -1) {
 		/* Failed to lock memory, but it's non-fatal error */
-		dprintf("mlock failed\n");
+		dprintf("mlock failed, error:%d\n", errno);
 	}
 	memset(shm_base, 0, shm_size);
 
