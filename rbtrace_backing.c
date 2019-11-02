@@ -22,10 +22,8 @@ STATIC_ASSERT(sizeof(struct rbtrace_fheader) < RBTRACE_FHEADER_SIZE);
 struct rbtrace_thread_data {
 	pthread_t thread;
 	sem_t sem;
-	bool inited;
 	bool terminate;
 } rbt_thread = {
-	.inited = false,
 	.terminate = false,
 };
 
@@ -379,7 +377,6 @@ int rbtrace_daemon_init(void)
 	if (rc != 0) {
 		goto pthread_fail;
 	}
-	rbt_thread.inited = true;
 	rc = pthread_setname_np(rbt_thread.thread,
 				RBTRACE_THREAD_NAME);
 	if (rc != 0) {
@@ -405,17 +402,21 @@ int rbtrace_daemon_init(void)
 	return rc;
 }
 
+void rbtrace_daemon_terminate(void)
+{
+	/* Terminate rbtrace thread */
+	rbt_thread.terminate = true;
+	sem_post(rbt_globals.sem_ptr);
+}
+
+void rbtrace_daemon_join(void)
+{
+	pthread_join(rbt_thread.thread, NULL);
+}
+
 void rbtrace_daemon_exit(void)
 {
 	int i;
-
-	/* Terminate rbtrace thread */
-	if (rbt_thread.inited) {
-		rbt_thread.terminate = true;
-		sem_post(rbt_globals.sem_ptr);
-		pthread_join(rbt_thread.thread, NULL);
-		rbt_thread.inited = false;
-	}
 
 	/* Close all fds */
 	for (i = 0; i < RBTRACE_RING_MAX; i++) {
@@ -427,11 +428,6 @@ void rbtrace_daemon_exit(void)
 
 	/* Cleanup global data */
 	rbtrace_globals_cleanup(true);
-}
-
-void rbtrace_daemon_join(void)
-{
-	pthread_join(rbt_thread.thread, NULL);
 }
 
 static int rbtrace_ctrl_open(struct rbtrace_info *ri, void *argp)
@@ -587,19 +583,16 @@ int rbtrace_ctrl(rbtrace_ring_t ring, rbtrace_op_t op, void *argp)
 	int rc = 0;
 	struct rbtrace_info *ri;
 
-	if (ring >= RBTRACE_RING_MAX) {
-		rc = -1;
-		goto out;
-	}
-
-	if (op >= RBTRACE_OP_MAX) {
-		rc = -1;
+	if ((ring >= RBTRACE_RING_MAX) || (op >= RBTRACE_OP_MAX)) {
+		dprintf("invalid parameter, ring:%d, op:%d\n", ring, op);
 		goto out;
 	}
 
 	ri = &rbt_globals.ri_ptr[ring];
 	if (rbt_ops[op]) {
 		rc = rbt_ops[op](ri, argp);
+	} else {
+		dprintf("op:%d not supported\n", op);
 	}
 
  out:

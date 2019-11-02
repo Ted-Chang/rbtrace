@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
@@ -10,8 +12,8 @@
 #include "rbtrace_private.h"
 #include "version.h"
 
-#define RBTRACED_DFT_PID_FILE	"/var/log/rbtraced.pid"
-#define RBTRACED_DFT_LOG_FILE	"/var/log/rbtraced.log"
+#define RBTRACED_DFT_PID_FILE	"rbtraced.pid"
+#define RBTRACED_DFT_LOG_FILE	"rbtraced.log"
 
 struct rbtrace_server {
 	char *pidfile;
@@ -37,7 +39,7 @@ static void sig_handler(const int sig)
 	}
 
 	if (__sync_add_and_fetch(&server.terminate, 1) == 1) {
-		rbtrace_daemon_exit();
+		rbtrace_daemon_terminate();
 		if (server.pidfile) {
 			unlink(server.pidfile);
 		}
@@ -65,15 +67,25 @@ static void daemonize(void)
 
 static void create_pid_file(void)
 {
-	FILE *fp = NULL;
+	int fd = NULL;
+	char buf[64];
+
 	if (server.pidfile == NULL) {
 		server.pidfile = RBTRACED_DFT_PID_FILE;
 	}
-	fp = fopen(server.pidfile, "w");
-	if (NULL != fp) {
-		fprintf(fp, "%d\n", (int)getpid());
-		fclose(fp);
+	fd = open(server.pidfile, O_RDWR|O_CREAT, 0660);
+	if (fd < 0) {
+		fprintf(stderr, "open pid file:%s failed, %s\n",
+			server.pidfile, strerror(errno));
+		exit(1);
 	}
+	if (lockf(fd, F_TLOCK, 0) < 0) {
+		fprintf(stderr, "lock pid file:%s failed, %s\n",
+			server.pidfile, strerror(errno));
+		exit(0);
+	}
+	sprintf(buf, "%d\n", getpid());
+	write(fd, buf, strlen(buf));
 }
 
 int main(int argc, char *argv[])
@@ -111,21 +123,16 @@ int main(int argc, char *argv[])
 		daemonize();
 	}
 
-	if (server.daemonize || (NULL != server.pidfile)) {
-		create_pid_file();
-	}
-
-	if (server.daemonize || (NULL != server.logfile)) {
-		;
-	}
+	create_pid_file();
 
 	rc = rbtrace_daemon_init();
 	if (rc != 0) {
-		dprintf("daemon init failed, error:%d\n", rc);
+		fprintf(stderr, "daemon init failed, error:%d\n", rc);
 		goto out;
 	}
 
 	rbtrace_daemon_join();
+	rbtrace_daemon_exit();
 	
  out:
 	return rc;
@@ -133,8 +140,7 @@ int main(int argc, char *argv[])
 
 static void version(void)
 {
-	printf("rbtrace daemon v=%s\n",
-	       RBTRACE_VERSION);
+	printf("rbtrace daemon v=%s\n", RBTRACE_VERSION);
 }
 
 static void usage(void)

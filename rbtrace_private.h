@@ -95,7 +95,8 @@ void rbtrace_globals_init(int fd, char *shm_base,
 			  sem_t *sem_ptr);
 void rbtrace_globals_cleanup(bool is_daemon);
 int rbtrace_daemon_init(void);
-void rbtrace_daemon_exit(void);
+void rbtrace_daemon_terminate(void);
 void rbtrace_daemon_join(void);
+void rbtrace_daemon_exit(void);
 
 #endif	/* __RBTRACE_PRIVATE_H__ */
