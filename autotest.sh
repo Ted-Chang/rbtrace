@@ -28,10 +28,23 @@ if [ $? -ne 0 ]; then
     die "rbt open trace file failed"
 fi
 
+./rbt -S TEST
+if [ $? -ne 0 ]; then
+    die "rbt set trace ID failed"
+fi
+
+./rbt -i
+if [ $? -ne 0 ]; then
+    die "rbt info failed"
+fi
+
 ./rbtbench -p 2 -t 2 -n 1000000
 if [ $? -ne 0 ]; then
     die "rbtbench failed"
 fi
+
+./test_segfault
+echo "test segfault done"
 
 ./rbt -c
 if [ $? -ne 0 ]; then
@@ -39,3 +52,4 @@ if [ $? -ne 0 ]; then
 fi
 
 kill $_pid
+echo "Autotest passed."

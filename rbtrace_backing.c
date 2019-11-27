@@ -33,6 +33,25 @@ int rbt_fds[RBTRACE_RING_MAX];
 union padded_rbtrace_fheader rbt_hdrs[RBTRACE_RING_MAX];
 uint64_t total_buffers = 0;
 
+static ssize_t safe_pwrite(int fd, const void *buf,
+			   size_t count, off_t offset)
+{
+	while (count > 0) {
+		ssize_t r = pwrite(fd, buf, count, offset);
+		if (r < 0) {
+			if (errno == EINTR) {
+				continue;
+			}
+			return -errno;
+		}
+		count -= r;
+		buf = (char *)buf + r;
+		offset += r;
+	}
+
+	return 0;
+}
+
 static void rbtrace_format_header(rbtrace_ring_t ring,
 				  struct timespec ts,
 				  struct tm *tm)
@@ -67,7 +86,7 @@ static void rbtrace_format_header(rbtrace_ring_t ring,
 
 static void rbtrace_write_header(rbtrace_ring_t ring)
 {
-	ssize_t nbytes = 0;
+	ssize_t ret = 0;
 	struct rbtrace_info *ri;
 	char path[RBTRACE_MAX_PATH];
 	struct timespec ts;
@@ -107,11 +126,11 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 	rbtrace_format_header(ring, ts, gm);
 
 	/* Write trace header to trace file */
-	nbytes = pwrite(rbt_fds[ring], &rbt_hdrs[ring],
-			sizeof(rbt_hdrs[ring]), 0);
-	if (nbytes != sizeof(rbt_hdrs[ring])) {
-		dprintf("ring:%d pwrite header failed, error:%d\n",
-			ring, errno);
+	ret = safe_pwrite(rbt_fds[ring], &rbt_hdrs[ring],
+			  sizeof(rbt_hdrs[ring]), 0);
+	if (ret) {
+		dprintf("ring:%d pwrite header failed, error:%zd\n",
+			ring, ret);
 		goto out;
 	}
 
@@ -139,7 +158,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	union padded_rbtrace_fheader *prf = NULL;
 	char *buf = NULL;
 	ssize_t buf_size = 0;
-	ssize_t nbytes = 0;
+	ssize_t ret = 0;
 	int flush = 0;
 	int lost = 0;
 	bool update_hdr = false;
@@ -168,10 +187,10 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	}
 
 	/* Write buffer content to file */
-	nbytes = pwrite(rbt_fds[ring], buf, buf_size, ri->ri_seek);
-	if (nbytes != buf_size) {
-		dprintf("ring:%d write trace failed, error:%d\n",
-			ring, errno);
+	ret = safe_pwrite(rbt_fds[ring], buf, buf_size, ri->ri_seek);
+	if (ret) {
+		dprintf("ring:%d write trace failed, error:%zd\n",
+			ring, ret);
 		return;
 	} else {
 		/* Clear the buffer to avoid poison data */
@@ -203,10 +222,10 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	}
 
 	if (update_hdr) {
-		nbytes = pwrite(rbt_fds[ring], prf, sizeof(*prf), 0);
-		if (nbytes != sizeof(*prf)) {
-			dprintf("ring:%d update hdr failed, error:%d\n",
-				ring, errno);
+		ret = safe_pwrite(rbt_fds[ring], prf, sizeof(*prf), 0);
+		if (ret) {
+			dprintf("ring:%d update hdr failed, error:%zd\n",
+				ring, ret);
 		}
 	}
 

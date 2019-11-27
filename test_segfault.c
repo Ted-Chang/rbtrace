@@ -15,6 +15,9 @@ int main(int argc, char *argv[])
 		goto out;
 	}
 
+	/* Write a buffer lost record */
+	rbtrace(RBTRACE_RING_IO, RBT_LOST, 65536, 0, 0, 0);
+
 	while (x++ < 100000) {
 		rbtrace(RBTRACE_RING_IO, RBT_TRAFFIC_TEST, pid, x, x, x);
 	}

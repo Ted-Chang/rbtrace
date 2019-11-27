@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#define RBT_STR
 #include "rbtracedef.h"
 #include "rbtrace_private.h"
 #include "version.h"
@@ -106,6 +107,7 @@ static uint64_t str_to_tflags(char *str)
 	char *pch;
 	char *ptr;
 	uint64_t tflags = 0;
+	int i;
 
 	ptr = strdup(str);
 	if (ptr == NULL) {
@@ -115,19 +117,51 @@ static uint64_t str_to_tflags(char *str)
 
 	pch = strtok(ptr, ",");
 	while (pch != NULL) {
+		for (i = RBT_TRAFFIC_TEST; i < RBT_LAST; i++) {
+			if (strcmp(pch, rbt_tid_str[i]) == 0) {
+				/* Break the for loop */
+				break;
+			}
+		}
+
+		if (i >= RBT_LAST) {
+			fprintf(stderr, "invalid trace id:%s\n", pch);
+			/* Clear all flags and return */
+			tflags = 0;
+			goto out;
+		}
+
+		tflags |= (1 << i);
 		pch = strtok(NULL, ",");
 	}
 
+ out:
 	free(ptr);
 	return tflags;
 }
 
 static char *tflags_to_str(uint64_t tflags, char *buf, int bufsz)
 {
+	int i;
+	int nchars;
 	char *ret;
 
 	buf[0] = '\0';
 	ret = buf;
+	for (i = RBT_TRAFFIC_TEST;
+	     i < sizeof(rbt_tid_str)/sizeof(rbt_tid_str[0]);
+	     i++) {
+		if (tflags & (1 << i)) {
+			nchars = snprintf(buf, bufsz, "%s ",
+					  rbt_tid_str[i]);
+			if (nchars < 0) {
+				break;
+			}
+
+			buf += nchars;
+			bufsz -= nchars;
+		}
+	}
 
 	return ret;
 }
@@ -136,14 +170,14 @@ static void dump_rbtrace_info(struct rbtrace_op_info_arg *info_arg)
 {
 	char buf[512];
 
-	printf("name      : %s\n", info_arg->ring_name);
-	printf("desc      : %s\n", info_arg->ring_desc);
-	printf("flags     : %s\n", flags_to_str(info_arg->flags, buf,
-						sizeof(buf)));
-	printf("tflags    : %s\n", tflags_to_str(info_arg->tflags, buf,
-						 sizeof(buf)));
-	printf("file size : %ld\n", info_arg->file_size / ONE_MB);
-	printf("file path : %s\n", info_arg->file_path);
+	printf("name          : %s\n", info_arg->ring_name);
+	printf("desc          : %s\n", info_arg->ring_desc);
+	printf("flags         : %s\n", flags_to_str(info_arg->flags,
+						    buf, sizeof(buf)));
+	printf("tflags        : %s\n", tflags_to_str(info_arg->tflags,
+						     buf, sizeof(buf)));
+	printf("file size(MB) : %ld\n", info_arg->file_size / ONE_MB);
+	printf("file path     : %s\n", info_arg->file_path);
 }
 
 static void usage(void);
