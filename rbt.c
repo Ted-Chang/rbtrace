@@ -4,11 +4,10 @@
 #include <string.h>
 #include <unistd.h>
 #define RBT_STR
-#include "rbtracedef.h"
 #include "rbtrace_private.h"
 #include "version.h"
 
-#define ONE_MB	(1024UL * 1024UL)
+#define ONE_MB		(1024UL * 1024UL)
 
 struct rbtrace_option {
 	rbtrace_ring_t ring;
@@ -78,14 +77,17 @@ static char *rbtrace_op_to_str(rbtrace_op_t op)
 	return "unknown";
 }
 
-static char *flags_to_str(uint64_t flags, char *buf, int bufsz)
+static char *flags_to_str(uint64_t flags)
 {
 	int i;
 	int nchars;
-	char *ret;
+	size_t bufsz;
+	char *buf;
+	static char _flags_buf[512];
 
-	buf[0] = '\0';
-	ret = buf;
+	buf = _flags_buf;
+	bufsz = sizeof(_flags_buf);
+
 	for (i = 0; i < sizeof(flg_names)/sizeof(flg_names[0]); i++) {
 		if (flags & flg_names[i].flag) {
 			nchars = snprintf(buf, bufsz, "%s ",
@@ -99,83 +101,15 @@ static char *flags_to_str(uint64_t flags, char *buf, int bufsz)
 		}
 	}
 
-	return ret;
-}
-
-static uint64_t str_to_tflags(char *str)
-{
-	char *pch;
-	char *ptr;
-	uint64_t tflags = 0;
-	int i;
-
-	ptr = strdup(str);
-	if (ptr == NULL) {
-		fprintf(stderr, "insufficient memory to parse tflags\n");
-		return 0;
-	}
-
-	pch = strtok(ptr, ",");
-	while (pch != NULL) {
-		for (i = RBT_TRAFFIC_TEST; i < RBT_LAST; i++) {
-			if (strcmp(pch, rbt_tid_str[i]) == 0) {
-				/* Break the for loop */
-				break;
-			}
-		}
-
-		if (i >= RBT_LAST) {
-			fprintf(stderr, "invalid trace id:%s\n", pch);
-			/* Clear all flags and return */
-			tflags = 0;
-			goto out;
-		}
-
-		tflags |= (1 << i);
-		pch = strtok(NULL, ",");
-	}
-
- out:
-	free(ptr);
-	return tflags;
-}
-
-static char *tflags_to_str(uint64_t tflags, char *buf, int bufsz)
-{
-	int i;
-	int nchars;
-	char *ret;
-
-	buf[0] = '\0';
-	ret = buf;
-	for (i = RBT_TRAFFIC_TEST;
-	     i < sizeof(rbt_tid_str)/sizeof(rbt_tid_str[0]);
-	     i++) {
-		if (tflags & (1 << i)) {
-			nchars = snprintf(buf, bufsz, "%s ",
-					  rbt_tid_str[i]);
-			if (nchars < 0) {
-				break;
-			}
-
-			buf += nchars;
-			bufsz -= nchars;
-		}
-	}
-
-	return ret;
+	return _flags_buf;
 }
 
 static void dump_rbtrace_info(struct rbtrace_op_info_arg *info_arg)
 {
-	char buf[512];
-
 	printf("name          : %s\n", info_arg->ring_name);
 	printf("desc          : %s\n", info_arg->ring_desc);
-	printf("flags         : %s\n", flags_to_str(info_arg->flags,
-						    buf, sizeof(buf)));
-	printf("tflags        : %s\n", tflags_to_str(info_arg->tflags,
-						     buf, sizeof(buf)));
+	printf("flags         : %s\n", flags_to_str(info_arg->flags));
+	printf("tflags        : %s\n", tflags_to_str(info_arg->tflags));
 	printf("file size(MB) : %ld\n", info_arg->file_size / ONE_MB);
 	printf("file path     : %s\n", info_arg->file_path);
 }
@@ -372,7 +306,8 @@ static void usage(void)
 	       "       [-S <trace-id>]  Set trace ID to be enabled\n"
 	       "       [-C <trace-id>]  Clear trace ID to be disabled\n"
 	       "       [-v]             Display the version information\n"
-	       "       [-h]             Display this help message\n");
+	       "       [-h]             Display this help message\n\n"
+	       "Available trace IDs:\n%s\n", tflags_to_str(TFLAGS_ALL));
 }
 
 static void version(void)

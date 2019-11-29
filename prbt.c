@@ -35,17 +35,6 @@ struct prbt_option {
 static void usage(void);
 static void version(void);
 
-static void print_all_trace_ids(void)
-{
-	int i;
-
-	printf("Available trace IDs:\n");
-	for (i = RBT_TRAFFIC_TEST; i < RBT_LAST; i++) {
-		printf("%s ", rbt_tid_str[i]);
-	}
-	printf("\n");
-}
-
 static int parse_trace_header(int fd, FILE *fp,
 			      union padded_rbtrace_fheader *prf)
 {
@@ -379,12 +368,9 @@ int main(int argc, char *argv[])
 	int rc = 0;
 	int ch = 0;
 	int fd = -1;
-	int i = 0;
 	union padded_rbtrace_fheader prf;
 	FILE *fp = NULL;
 	struct tm time;
-	char *str = NULL;
-	char *pch = NULL;
 
 	while ((ch = getopt(argc, argv, "f:o:s:e:i:Ivh")) != -1) {
 		switch (ch) {
@@ -420,28 +406,11 @@ int main(int argc, char *argv[])
 			opts.only_show_info = true;
 			break;
 		case 'i':
-			opts.trace_ids = 0;
-			str = strdup(optarg);
-			if (str == NULL) {
-				fprintf(stderr, "Insufficient memory parsing trace IDs!\n");
+			opts.trace_ids = str_to_tflags(optarg);
+			if (opts.trace_ids == 0) {
+				fprintf(stderr, "invalid trace ID specified\n");
 				goto out;
 			}
-			pch = strtok(str, ",");
-			while (pch != NULL) {
-				for (i = RBT_TRAFFIC_TEST; i < RBT_LAST; i++) {
-					if (strcasecmp(pch, rbt_tid_str[i]) == 0) {
-						opts.trace_ids |= (1 << i);
-						break;	// break out the for loop
-					}
-				}
-				if (i >= RBT_LAST) {
-					fprintf(stderr, "Invalid trace ID: %s\n", pch);
-					free(str);
-					goto out;
-				}
-				pch = strtok(NULL, ",");
-			}
-			free(str);
 			/* By default enable following traces */
 			opts.trace_ids |= (1 << RBT_LOST);
 			break;
@@ -509,8 +478,8 @@ static void usage(void)
 	       "       [-v]               Display version information\n"
 	       "       [-h]               Display this help message\n\n"
 	       "e.g.   ./prbt -f test.rbt.0 -o test.txt -I\n"
-	       "       ./prbt -f test.rbt.0 -i TEST\n\n");
-	print_all_trace_ids();
+	       "       ./prbt -f test.rbt.0 -i TEST\n\n"
+	       "Available trace IDs:\n%s\n", tflags_to_str(TFLAGS_ALL));
 }
 
 static void version(void)

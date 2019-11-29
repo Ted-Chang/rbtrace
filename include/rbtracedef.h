@@ -61,17 +61,6 @@ union padded_rbtrace_fheader {
 	char pad[RBTRACE_FHEADER_SIZE];
 };
 
-#ifdef RBT_STR
-const char *rbt_tid_str[] = {
-	"LOST",
-	"TEST",
-};
-const char *rbt_fmt_str[] = {
-	"Lost %lld",
-	"OFF %#16llX LEN %#6llx DEV %#4d OP %04x",
-};
-#endif	/* RBT_STR */
-
 #ifdef __cplusplus
 }
 #endif
