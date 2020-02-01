@@ -22,8 +22,10 @@ STATIC_ASSERT(sizeof(struct rbtrace_fheader) < RBTRACE_FHEADER_SIZE);
 struct rbtrace_thread_data {
 	pthread_t thread;
 	sem_t sem;
-	bool terminate;
+	volatile bool active;
+	volatile bool terminate;
 } rbt_thread = {
+	.active = false,
 	.terminate = false,
 };
 
@@ -253,6 +255,7 @@ static void *rbtrace_thread_fn(void *arg)
 	struct rbtrace_thread_data *thread = NULL;
 
 	thread = (struct rbtrace_thread_data *)arg;
+	thread->active = true;
 	sem_post(&thread->sem);
 
 	while (!thread->terminate) {
@@ -425,23 +428,22 @@ int rbtrace_daemon_init(void)
 	return rc;
 }
 
-void rbtrace_daemon_terminate(void)
-{
-	/* Terminate rbtrace thread */
-	rbt_thread.terminate = true;
-	sem_post(rbt_globals.sem_ptr);
-}
-
-void rbtrace_daemon_join(void)
-{
-	pthread_join(rbt_thread.thread, NULL);
-}
-
 void rbtrace_daemon_exit(void)
 {
 	int i;
 
-	/* Close all fds */
+	/* Terminate rbtrace thread */
+	rbt_thread.terminate = true;
+
+	if (rbt_globals.sem_ptr != SEM_FAILED) {
+		sem_post(rbt_globals.sem_ptr);
+	}
+
+	if (rbt_thread.active) {
+		pthread_join(rbt_thread.thread, NULL);
+	}
+
+	/* Close all file descriptors */
 	for (i = 0; i < RBTRACE_RING_MAX; i++) {
 		if (rbt_fds[i] != -1) {
 			close(rbt_fds[i]);

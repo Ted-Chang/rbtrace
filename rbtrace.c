@@ -241,20 +241,26 @@ void rbtrace_globals_init(int shm_fd, char *shm_base,
 	rbt_globals.inited = true;
 }
 
-void rbtrace_globals_cleanup(bool is_daemon)
+void rbtrace_globals_cleanup(bool do_unlink)
 {
+	int rc = 0;
+
 	if ((rbt_globals.sem_ptr != SEM_FAILED) &&
 	    (rbt_globals.sem_ptr != NULL)) {
 		sem_close(rbt_globals.sem_ptr);
-		if (is_daemon) {
-			sem_unlink(RBTRACE_SEM_NAME);
+		if (do_unlink) {
+			rc = sem_unlink(RBTRACE_SEM_NAME);
+			if (rc < 0) {
+				dprintf("unlink sem failed, error:%s\n",
+					strerror(errno));
+			}
 		}
 	}
 
 	if (rbt_globals.shm_fd != -1) {
 		if ((rbt_globals.shm_base != MAP_FAILED) &&
 		    (rbt_globals.shm_base != NULL)) {
-			if (is_daemon) {
+			if (do_unlink) {
 				munlock(rbt_globals.shm_base,
 					rbt_globals.shm_size);
 			}
@@ -263,8 +269,12 @@ void rbtrace_globals_cleanup(bool is_daemon)
 		}
 
 		close(rbt_globals.shm_fd);
-		if (is_daemon) {
-			shm_unlink(RBTRACE_SHM_NAME);
+		if (do_unlink) {
+			rc = shm_unlink(RBTRACE_SHM_NAME);
+			if (rc < 0) {
+				dprintf("unlink shm failed, error:%s\n",
+					strerror(errno));
+			}
 		}
 	}
 

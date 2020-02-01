@@ -19,7 +19,7 @@ struct rbtrace_server {
 	char *pidfile;
 	char *logfile;
 	bool daemonize;
-	volatile int terminate;
+	volatile sig_atomic_t terminate;
 } server = {
 	.pidfile = RBTRACED_DFT_PID_FILE,
 	.logfile = RBTRACED_DFT_LOG_FILE,
@@ -38,12 +38,7 @@ static void sig_handler(const int sig)
 		return;
 	}
 
-	if (__sync_add_and_fetch(&server.terminate, 1) == 1) {
-		rbtrace_daemon_terminate();
-		if (server.pidfile) {
-			unlink(server.pidfile);
-		}
-	}
+	server.terminate = 1;
 }
 
 static void daemonize(void)
@@ -94,6 +89,8 @@ int main(int argc, char *argv[])
 {
 	int rc = 0;
 	int ch;
+	int sig;
+	sigset_t set;
 
 	while ((ch = getopt(argc, argv, "dhp:l:v")) != -1) {
 		switch (ch) {
@@ -133,7 +130,25 @@ int main(int argc, char *argv[])
 		goto out;
 	}
 
-	rbtrace_daemon_join();
+	sigemptyset(&set);
+	sigaddset(&set, SIGTERM);
+	sigaddset(&set, SIGQUIT);
+	sigaddset(&set, SIGINT);
+
+	while (!server.terminate) {
+		sig = 0;
+		sigwait(&set, &sig);
+		if ((sig == SIGTERM) ||
+		    (sig == SIGQUIT) ||
+		    (sig == SIGINT)) {
+			break;
+		}
+	}
+
+	if (server.pidfile) {
+		unlink(server.pidfile);
+	}
+
 	rbtrace_daemon_exit();
 	
  out:

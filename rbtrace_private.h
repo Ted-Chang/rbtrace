@@ -93,10 +93,8 @@ void rbtrace_signal_thread(struct rbtrace_info *ri);
 void rbtrace_globals_init(int fd, char *shm_base,
 			  size_t shm_size,
 			  sem_t *sem_ptr);
-void rbtrace_globals_cleanup(bool is_daemon);
+void rbtrace_globals_cleanup(bool do_unlink);
 int rbtrace_daemon_init(void);
-void rbtrace_daemon_terminate(void);
-void rbtrace_daemon_join(void);
 void rbtrace_daemon_exit(void);
 
 #endif	/* __RBTRACE_PRIVATE_H__ */

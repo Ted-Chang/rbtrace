@@ -52,4 +52,14 @@ if [ $? -ne 0 ]; then
 fi
 
 kill $_pid
+_pid=$(pidof rbtraced)
+if [[ -n $_pid && ! -z "$_pid" ]]; then
+    die "kill rbtraced failed"
+fi
+if [ -e /dev/shm/rbtracebuf ]; then
+    die "shared memory *not* cleaned"
+fi
+if [ -e /dev/shm/sem.rbtrace ]; then
+    die "semaphore *not* cleaned"
+fi
 echo "Autotest passed."
