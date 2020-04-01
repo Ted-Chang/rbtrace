@@ -90,7 +90,7 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 {
 	ssize_t ret = 0;
 	struct rbtrace_info *ri;
-	char path[RBTRACE_MAX_PATH];
+	char path[512];
 	struct timespec ts;
 	struct tm *gm = NULL;
 
@@ -107,10 +107,10 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 
 	if (ri->ri_flags & RBTRACE_DO_ZAP) {
 		snprintf(path, sizeof(path),
-			 "%s.%02d-%02d_%02d-%02d-%02d_%06ld",
+			 "%s.%02d-%02d_%02d-%02d-%02d_%03ld",
 			 ri->ri_file_path, gm->tm_mon + 1,
 			 gm->tm_mday, gm->tm_hour, gm->tm_min,
-			 gm->tm_sec, ts.tv_nsec / 1000);
+			 gm->tm_sec, ts.tv_nsec / 1000000);
 	} else {
 		strcpy(path, ri->ri_file_path);
 	}

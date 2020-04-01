@@ -182,7 +182,7 @@ int rbtrace(rbtrace_ring_t ring, uint8_t traceid, uint64_t a0,
 	return 0;
 }
 
-inline int rbtrace_traffic_enabled(rbtrace_ring_t ring, uint8_t traceid)
+int rbtrace_traffic_enabled(rbtrace_ring_t ring, uint8_t traceid)
 {
 	if ((ring >= RBTRACE_RING_MAX) ||
 	    (traceid >= RBT_LAST) ||

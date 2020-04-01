@@ -46,6 +46,14 @@ fi
 ./test_segfault
 echo "test segfault done"
 
+_res=$(file core.* | grep "test_segfault")
+echo "$_res"
+if [[ -z "$_res" ]]; then
+    die "unknown core generated"
+fi
+
+rm -f core.*
+
 ./rbt -c
 if [ $? -ne 0 ]; then
     die "rbt close trace file failed"
@@ -62,4 +70,7 @@ fi
 if [ -e /dev/shm/sem.rbtrace ]; then
     die "semaphore *not* cleaned"
 fi
+
+rm -f trace.dat*
+
 echo "Autotest passed."

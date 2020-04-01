@@ -112,8 +112,7 @@ static char *tflags_to_str(uint64_t tflags)
 
 extern int rbtrace(rbtrace_ring_t ring, uint8_t traceid, uint64_t a0,
 		   uint64_t a1, uint64_t a2, uint64_t a3);
-extern inline int rbtrace_traffic_enabled(rbtrace_ring_t ring,
-					  uint8_t traceid);
+extern int rbtrace_traffic_enabled(rbtrace_ring_t ring, uint8_t traceid);
 extern int rbtrace_init(void);
 extern void rbtrace_exit(void);
 

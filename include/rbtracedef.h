@@ -22,15 +22,14 @@ extern "C" {
 
 /* Format of a trace entry */
 struct rbtrace_entry {
-	struct timespec timestamp;
-	uint32_t cpuid:8;
-	uint32_t thread:24;
-	uint32_t traceid:6;
-	uint32_t reserved:26;
 	uint64_t a0;
 	uint64_t a1;
 	uint64_t a2;
 	uint64_t a3;
+	struct timespec timestamp;
+	uint32_t cpuid:8;
+	uint32_t thread:18;
+	uint32_t traceid:6;
 };
 
 #define RBTRACE_FHEADER_MAGIC	"RBTRACE"

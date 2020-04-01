@@ -62,7 +62,7 @@ static void daemonize(void)
 
 static void create_pid_file(void)
 {
-	int fd = NULL;
+	int fd = -1;
 	char buf[256];
 
 	if (server.pidfile == NULL) {
