@@ -15,12 +15,9 @@
 #define RBTRACE_SHM_NAME	"/rbtracebuf"
 #define RBTRACE_SEM_NAME	"/rbtrace"
 
-struct rbtrace_info {
+struct ring_info {
 	char ri_file_path[RBTRACE_MAX_PATH];// trace file path
-	size_t ri_data_size;	// number of bytes in a buffer write
-	uint32_t ri_size;	// number of records in single ring
 	rbtrace_ring_t ri_ring;	// ring ID
-	uint64_t ri_seek;	// offset to seek to before write
 	volatile uint64_t ri_flags;// attribute flags for this ring
 	volatile uint64_t ri_tflags;// traffic flags for this ring
 	volatile int ri_cir_off;// offset in trace records to active ring buffer
@@ -30,7 +27,7 @@ struct rbtrace_info {
 	volatile int ri_lost;	// number of records lost
 };
 
-/* Flags for ri_flags in rbtrace_info */
+/* Flags for ri_flags in ring_info */
 #define RBTRACE_DO_DISK		(1 << 1)
 #define RBTRACE_DO_OPEN		(1 << 2)
 #define RBTRACE_DO_WRAP		(1 << 3)
@@ -38,12 +35,13 @@ struct rbtrace_info {
 #define RBTRACE_DO_CLOSE	(1 << 5)
 #define RBTRACE_DO_FLUSH	(1 << 6)
 
-struct rbtrace_config {
+struct ring_config {
 	rbtrace_ring_t rc_ring;
 	char *rc_name;
 	char *rc_desc;
 	uint64_t rc_flags;
-	uint32_t rc_size;
+	uint32_t rc_size;	// number of trace records in a buffer
+	uint32_t rc_data_size;	// number of bytes in a buffer write
 };
 
 struct rbtrace_global_data {
@@ -54,7 +52,7 @@ struct rbtrace_global_data {
 	sem_t *sem_ptr;
 	uint64_t *fsize_ptr;
 	rbtrace_ring_t *ring_ptr;
-	struct rbtrace_info *ri_ptr;
+	struct ring_info *ri_ptr;
 	struct rbtrace_entry *re_base;
 };
 
@@ -83,13 +81,14 @@ struct rbtrace_op_info_arg {
 	uint64_t flags;
 	uint64_t tflags;
 	uint64_t file_size;
+	uint32_t trace_entry_size;
 };
 
-typedef int (*rbtrace_op_handler)(struct rbtrace_info *ri, void *argp);
+typedef int (*rbtrace_op_handler)(struct ring_info *ri, void *argp);
 
 int rbtrace_ctrl(rbtrace_ring_t ring, rbtrace_op_t op, void *argp);
 size_t rbtrace_calc_shm_size(void);
-void rbtrace_signal_thread(struct rbtrace_info *ri);
+void rbtrace_signal_thread(struct ring_info *ri);
 void rbtrace_globals_init(int fd, char *shm_base,
 			  size_t shm_size,
 			  sem_t *sem_ptr);

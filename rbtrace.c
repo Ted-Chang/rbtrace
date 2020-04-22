@@ -24,19 +24,21 @@
 /* For now we only support 32 trace IDs */
 STATIC_ASSERT(RBT_LAST < 64);
 
-#define RBTRACE_IO_RING_SIZE	(64*1024)
+#define IO_RING_SIZE	(64*1024)
 
-struct rbtrace_config rbt_cfgs[] = {
+struct ring_config ring_cfgs[] = {
 	{
-		RBTRACE_RING_IO,
-		"io",
-		"I/O traffic",
-		0,
-		RBTRACE_IO_RING_SIZE,
+		.rc_ring = RBTRACE_RING_IO,
+		.rc_name = "io",
+		.rc_desc = "I/O traffic",
+		.rc_flags = 0,
+		.rc_size = IO_RING_SIZE,
+		.rc_data_size = IO_RING_SIZE * sizeof(struct rbtrace_entry),
 	},
 };
 
-STATIC_ASSERT((sizeof(rbt_cfgs)/sizeof(rbt_cfgs[0])) == RBTRACE_RING_MAX);
+STATIC_ASSERT((sizeof(ring_cfgs)/sizeof(ring_cfgs[0])) ==
+	      RBTRACE_RING_MAX);
 
 struct rbtrace_global_data rbt_globals = {
 	.inited = false,
@@ -50,7 +52,7 @@ struct rbtrace_global_data rbt_globals = {
 	.re_base = NULL,
 };
 
-void rbtrace_signal_thread(struct rbtrace_info *ri)
+void rbtrace_signal_thread(struct ring_info *ri)
 {
 	(*rbt_globals.ring_ptr) = ri->ri_ring;
 	if (sem_post(rbt_globals.sem_ptr) == -1) {
@@ -60,18 +62,20 @@ void rbtrace_signal_thread(struct rbtrace_info *ri)
 }
 
 static struct rbtrace_entry *
-ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
+ringwrap_slot(struct ring_config *cfg,
+	      struct ring_info *ri,
+	      uint32_t slot)
 {
 	struct rbtrace_entry *re;
 	int lost;
 
-	if (slot == ri->ri_size) {
+	if (slot == cfg->rc_size) {
 		/* swap ring buffer */
 		if (__sync_add_and_fetch(&ri->ri_flush, 1) == 1) {
 			/* No buffer flush in progress, swap cir_off & alt_off,
 			 * guarded by ri_flush and CMPXCHG
 			 */
-			size_t temp;
+			int temp;
 			temp = ri->ri_cir_off;
 			ri->ri_cir_off = ri->ri_alt_off;
 			ri->ri_alt_off = temp;
@@ -102,11 +106,11 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 		}
 	} else {
 		int cnt = 1024;
-		while ((ri->ri_slot > ri->ri_size) && (--cnt > 0)) {
+		while ((ri->ri_slot > cfg->rc_size) && (--cnt > 0)) {
 			pause();
 		}
 		slot = __sync_add_and_fetch(&ri->ri_slot, 1);
-		if (slot < ri->ri_size) {
+		if (slot < cfg->rc_size) {
 			re = ((struct rbtrace_entry *)
 			      (rbt_globals.re_base + ri->ri_cir_off)) + slot;
 			clock_gettime(CLOCK_REALTIME, &re->timestamp);
@@ -122,7 +126,7 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 	}
 
 	slot = __sync_add_and_fetch(&ri->ri_slot, 1);
-	if (slot < ri->ri_size) {
+	if (slot < cfg->rc_size) {
 		re = ((struct rbtrace_entry *)
 		      (rbt_globals.re_base + ri->ri_cir_off)) + slot;
 		clock_gettime(CLOCK_REALTIME, &re->timestamp);
@@ -138,13 +142,13 @@ ringwrap_slot(struct rbtrace_info *ri, uint32_t slot)
 }
 
 static struct rbtrace_entry *
-ringwrap(struct rbtrace_info *ri)
+ringwrap(struct ring_config *cfg, struct ring_info *ri)
 {
 	uint32_t slot;
 	struct rbtrace_entry *re;
 
 	slot = __sync_add_and_fetch(&ri->ri_slot, 1);
-	if (slot < ri->ri_size) {
+	if (slot < cfg->rc_size) {
 		re = ((struct rbtrace_entry *)
 		      (rbt_globals.re_base + ri->ri_cir_off)) + slot;
 		clock_gettime(CLOCK_REALTIME, &re->timestamp);
@@ -153,13 +157,14 @@ ringwrap(struct rbtrace_info *ri)
 		return re;
 	}
 
-	return ringwrap_slot(ri, slot);
+	return ringwrap_slot(cfg, ri, slot);
 }
 
 int rbtrace(rbtrace_ring_t ring, uint8_t traceid, uint64_t a0,
 	    uint64_t a1, uint64_t a2, uint64_t a3)
 {
-	struct rbtrace_info *ri;
+	struct ring_config *cfg;
+	struct ring_info *ri;
 	struct rbtrace_entry *re;
 
 	if ((ring >= RBTRACE_RING_MAX) ||
@@ -167,8 +172,9 @@ int rbtrace(rbtrace_ring_t ring, uint8_t traceid, uint64_t a0,
 		return -1;
 	}
 
-	ri = rbt_globals.ri_ptr + ring;
-	re = ringwrap(ri);
+	ri = &rbt_globals.ri_ptr[ring];
+	cfg = &ring_cfgs[ring];
+	re = ringwrap(cfg, ri);
 	if (re == NULL) {
 		return -1;
 	} else {
@@ -193,7 +199,7 @@ int rbtrace_traffic_enabled(rbtrace_ring_t ring, uint8_t traceid)
 	return rbt_globals.ri_ptr[ring].ri_tflags & (1 << traceid);
 }
 
-static size_t rbtrace_calc_ring_size(struct rbtrace_config *cfg)
+static size_t rbtrace_calc_ring_size(struct ring_config *cfg)
 {
 	size_t size = 0;
 
@@ -211,7 +217,7 @@ size_t rbtrace_calc_shm_size(void)
 	size += sizeof(*rbt_globals.ring_ptr);
 
 	for (i = RBTRACE_RING_IO; i < RBTRACE_RING_MAX; i++) {
-		size += rbtrace_calc_ring_size(&rbt_cfgs[i]);
+		size += rbtrace_calc_ring_size(&ring_cfgs[i]);
 	}
 
 	size += (RBTRACE_RING_MAX * sizeof(*rbt_globals.ri_ptr));
@@ -234,8 +240,8 @@ void rbtrace_globals_init(int shm_fd, char *shm_base,
 	offset += sizeof(uint64_t);
 	rbt_globals.ring_ptr = (rbtrace_ring_t *)(shm_base + offset);
 	offset += sizeof(rbtrace_ring_t);
-	rbt_globals.ri_ptr = (struct rbtrace_info *)(shm_base + offset);
-	offset += sizeof(struct rbtrace_info) * RBTRACE_RING_MAX;
+	rbt_globals.ri_ptr = (struct ring_info *)(shm_base + offset);
+	offset += sizeof(struct ring_info) * RBTRACE_RING_MAX;
 	rbt_globals.re_base = (struct rbtrace_entry *)(shm_base + offset);
 
 	rbt_globals.inited = true;

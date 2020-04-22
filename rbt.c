@@ -104,14 +104,15 @@ static char *flags_to_str(uint64_t flags)
 	return _flags_buf;
 }
 
-static void dump_rbtrace_info(struct rbtrace_op_info_arg *info_arg)
+static void dump_ring_info(struct rbtrace_op_info_arg *info_arg)
 {
-	printf("name          : %s\n", info_arg->ring_name);
-	printf("desc          : %s\n", info_arg->ring_desc);
-	printf("flags         : %s\n", flags_to_str(info_arg->flags));
-	printf("tflags        : %s\n", tflags_to_str(info_arg->tflags));
-	printf("file size(MB) : %ld\n", info_arg->file_size / ONE_MB);
-	printf("file path     : %s\n", info_arg->file_path);
+	printf("name             : %s\n", info_arg->ring_name);
+	printf("desc             : %s\n", info_arg->ring_desc);
+	printf("flags            : %s\n", flags_to_str(info_arg->flags));
+	printf("tflags           : %s\n", tflags_to_str(info_arg->tflags));
+	printf("file size(MB)    : %ld\n", info_arg->file_size / ONE_MB);
+	printf("file path        : %s\n", info_arg->file_path);
+	printf("trace entry size : %d\n", info_arg->trace_entry_size);
 }
 
 static void usage(void);
@@ -119,7 +120,7 @@ static void version(void);
 
 int main(int argc, char *argv[])
 {
-	int rc = 0;
+	int rc = -1;
 	int ch = 0;
 	char *endptr = NULL;
 	rbtrace_op_t op = RBTRACE_OP_MAX;
@@ -135,7 +136,7 @@ int main(int argc, char *argv[])
 	bool do_set_tflags = false;
 	bool do_clear_tflags = false;
 
-	while ((ch = getopt(argc, argv, "r:o:cw:z:is:S:C:vh")) != -1) {
+	while ((ch = getopt(argc, argv, "vhcir:o:w:z:s:S:C:")) != -1) {
 		switch (ch) {
 		case 'r':
 			if (strcmp(optarg, "io") == 0) {
@@ -193,6 +194,7 @@ int main(int argc, char *argv[])
 		case 'S':
 			opts.stflags = str_to_tflags(optarg);
 			if (opts.stflags == 0) {
+				fprintf(stderr, "Invalid traffic flags\n");
 				goto out;
 			}
 			do_set_tflags = true;
@@ -200,6 +202,7 @@ int main(int argc, char *argv[])
 		case 'C':
 			opts.ctflags = str_to_tflags(optarg);
 			if (opts.ctflags == 0) {
+				fprintf(stderr, "Invalid traffic flags\n");
 				goto out;
 			}
 			do_clear_tflags = true;
@@ -279,7 +282,7 @@ int main(int argc, char *argv[])
 		if (rc != 0) {
 			goto out;
 		} else {
-			dump_rbtrace_info(&info_arg);
+			dump_ring_info(&info_arg);
 		}
 	}
 

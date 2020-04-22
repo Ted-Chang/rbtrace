@@ -33,8 +33,7 @@ static void version(void);
 static void sig_handler(const int sig)
 {
 	if ((sig != SIGTERM) &&
-	    (sig != SIGQUIT) &&
-	    (sig != SIGINT)) {
+	    (sig != SIGQUIT)) {
 		return;
 	}
 
@@ -116,7 +115,6 @@ int main(int argc, char *argv[])
 
 	(void)signal(SIGTERM, sig_handler);
 	(void)signal(SIGQUIT, sig_handler);
-	(void)signal(SIGINT, sig_handler);
 
 	if (server.daemonize) {
 		daemonize();

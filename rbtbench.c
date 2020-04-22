@@ -22,12 +22,16 @@
 /* Utility macro for tracing */
 #define RBT_TRACE_TEST(_dev_, _op_, _off_, _len_)	\
 	{						\
-		rbtrace(RBTRACE_RING_IO,		\
-			RBT_TRAFFIC_TEST,		\
-			(_off_),			\
-			(_len_),			\
-			(_dev_),			\
-			(_op_));			\
+		int ret;				\
+		ret = rbtrace(RBTRACE_RING_IO,		\
+			      RBT_TRAFFIC_TEST,		\
+			      (_off_),			\
+			      (_len_),			\
+			      (_dev_),			\
+			      (_op_));			\
+		if (ret != 0) {				\
+			printf("trace %X failed!\n", _off_);	\
+		}					\
 	}
 
 struct bench_option {
@@ -54,11 +58,11 @@ static void do_bench(struct bench_context *ctx)
 
 	srand((int)time(NULL));
 
-	while ((x = __sync_add_and_fetch(&ctx->x, 1)) < opts.nr_traces) {
+	while ((x = __sync_add_and_fetch(&ctx->x, 1)) <= opts.nr_traces) {
 		/* Trace op start */
 		RBT_TRACE_TEST(1, RBT_TRAFFIC_READ_START, x, 512);
 
-		/* Just randomly consume some time between tow trace
+		/* Just randomly consume some time between two trace
 		 * records
 		 */
 		i = rand() % 10000;

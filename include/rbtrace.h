@@ -62,7 +62,7 @@ static uint64_t str_to_tflags(const char *str)
 	pch = strtok(ptr, ",");
 	while (pch != NULL) {
 		for (i = RBT_TRAFFIC_TEST; i < RBT_LAST; i++) {
-			if (strcmp(pch, rbt_tid_str[i])) {
+			if (strcmp(pch, rbt_tid_str[i]) == 0) {
 				break;
 			}
 		}
