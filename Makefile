@@ -3,7 +3,7 @@ CFLAGS = -Wall -g -fstack-protector -I./include -D_GNU_SOURCE -lrt -lpthread
 CC = gcc
 AR = ar
 
-all: librbtrace rbtraced rbt prbt rbtbench test_segfault
+all: librbtrace rbtraced rbt prbt rbtbench test_segfault test_longterm
 
 librbtrace:
 	$(CC) $(CFLAGS) -c -o rbtrace.o rbtrace.c
@@ -23,6 +23,9 @@ rbtbench: librbtrace
 
 test_segfault: librbtrace
 	$(CC) $(CFLAGS) test_segfault.c librbtrace.a -o test_segfault
+
+test_longterm: librbtrace
+	$(CC) $(CFLAGS) test_longterm.c librbtrace.a -o test_longterm
 
 clean:
 	rm -rf *.o librbtrace.a rbt prbt rbtraced rbtbench test_segfault

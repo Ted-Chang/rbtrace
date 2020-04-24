@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
 /* Max length of trace file path */
-#define RBTRACE_MAX_PATH	(256)
+#define RBTRACE_MAX_PATH	(1024)
 
 /* Max length of trace name and description */
 #define RBTRACE_MAX_NAME	(64)

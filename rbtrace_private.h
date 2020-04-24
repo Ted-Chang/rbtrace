@@ -86,6 +86,7 @@ struct rbtrace_op_info_arg {
 
 typedef int (*rbtrace_op_handler)(struct ring_info *ri, void *argp);
 
+void set_dump_shm();
 int rbtrace_ctrl(rbtrace_ring_t ring, rbtrace_op_t op, void *argp);
 size_t rbtrace_calc_shm_size(void);
 void rbtrace_signal_thread(struct ring_info *ri);

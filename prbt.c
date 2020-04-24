@@ -11,8 +11,8 @@
 #include "rbtrace.h"
 #include "version.h"
 
-STATIC_ASSERT(sizeof(rbt_tid_str)/sizeof(rbt_tid_str[0]) == RBT_LAST);
-STATIC_ASSERT(sizeof(rbt_fmt_str)/sizeof(rbt_fmt_str[0]) == RBT_LAST);
+STATIC_ASSERT(sizeof(rbt_tid_str)/sizeof(rbt_tid_str[0]) == RBT_TRAFFIC_LAST);
+STATIC_ASSERT(sizeof(rbt_fmt_str)/sizeof(rbt_fmt_str[0]) == RBT_TRAFFIC_LAST);
 
 struct prbt_option {
 	char *file_path;
@@ -99,7 +99,7 @@ static void format_trace_record(char *buf, struct rbtrace_entry *re)
 	const char *fmt;
 	const char *tid;
 
-	if (re->traceid >= RBT_LAST) {
+	if (re->traceid >= RBT_TRAFFIC_LAST) {
 		nchars = sprintf(buf, "ID:%d, %16lX, %16lX, %16lX, %16lX",
 				 re->traceid, re->a0, re->a1,
 				 re->a2, re->a3);

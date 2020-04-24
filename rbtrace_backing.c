@@ -96,7 +96,7 @@ static void rbtrace_write_header(rbtrace_ring_t ring)
 	ssize_t ret = 0;
 	struct ring_info *ri;
 	struct ring_file_data *rfd;
-	char path[512];
+	char path[2048];
 	struct timespec ts;
 	struct tm *gm = NULL;
 
@@ -396,6 +396,8 @@ int rbtrace_daemon_init(void)
 		goto sem_open_fail;
 	}
 
+	/* Dump shared memory region if cored */
+	set_dump_shm();
 	/* Initialize global pointers */
 	rbtrace_globals_init(shm_fd, shm_base, shm_size, sem_ptr);
 	(*rbt_globals.fsize_ptr) = RBTRACE_DFT_FILE_SIZE;

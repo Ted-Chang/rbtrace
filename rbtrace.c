@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <time.h>
@@ -21,8 +22,8 @@
 #define pause()	__asm __volatile("pause\n": : : "memory")
 #endif
 
-/* For now we only support 32 trace IDs */
-STATIC_ASSERT(RBT_LAST < 64);
+/* For now we only support at most 64 trace IDs */
+STATIC_ASSERT(RBT_TRAFFIC_LAST < 64);
 
 #define IO_RING_SIZE	(64*1024)
 
@@ -191,7 +192,7 @@ int rbtrace(rbtrace_ring_t ring, uint8_t traceid, uint64_t a0,
 int rbtrace_traffic_enabled(rbtrace_ring_t ring, uint8_t traceid)
 {
 	if ((ring >= RBTRACE_RING_MAX) ||
-	    (traceid >= RBT_LAST) ||
+	    (traceid >= RBT_TRAFFIC_LAST) ||
 	    (rbt_globals.ri_ptr == NULL)) {
 		return false;
 	}
@@ -223,6 +224,23 @@ size_t rbtrace_calc_shm_size(void)
 	size += (RBTRACE_RING_MAX * sizeof(*rbt_globals.ri_ptr));
 
 	return size;
+}
+
+void set_dump_shm()
+{
+	int rc = 0;
+	pid_t pid = getpid();
+	char cmd[512];
+
+	snprintf(cmd, sizeof(cmd),
+		 "echo 59 > /proc/%u/coredump_filter", pid);
+	rc = system(cmd);
+	if (rc != 0) {
+		dprintf("set dump shared memory failed\n");
+		/* set dump shared memory is non-critical so ignore
+		 * error here
+		 */
+	}
 }
 
 void rbtrace_globals_init(int shm_fd, char *shm_base,
@@ -332,6 +350,8 @@ int rbtrace_init(void)
 		goto sem_open_fail;
 	}
 
+	/* Dump shared memory region if cored */
+	set_dump_shm();
 	rbtrace_globals_init(shm_fd, shm_base, shm_size, sem_ptr);
 	return rc;
 

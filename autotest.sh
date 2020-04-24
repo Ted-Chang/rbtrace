@@ -86,7 +86,7 @@ close_trace_file
 
 _trace_file=$(ls trace.dat.*)
 ./prbt -f $_trace_file -o trace.txt
-_trace_num=$(cat trace.txt | egrep "TEST|LOST" | awk '{print $7}' | wc -l)
+_trace_num=$(cat trace.txt | egrep "TEST|NULL" | awk '{print $7}' | wc -l)
 # rbtbench will record start and done in trace file for 1 op
 if [ $_trace_num -ne 131072 ]; then
     die "trace record number inconsistent"

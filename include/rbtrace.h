@@ -13,11 +13,12 @@ typedef enum rbtrace_ring {
 	RBTRACE_RING_MAX
 } rbtrace_ring_t;
 
-/* ring buffer trace ID
+/* ring buffer trace ID, should be less than 64
  */
-#define RBT_LOST		0x0000
-#define RBT_TRAFFIC_TEST	0x0001
-#define RBT_LAST		(RBT_TRAFFIC_TEST+1)
+#define RBT_NULL		0x0000
+#define RBT_LOST		0x0001
+#define RBT_TRAFFIC_TEST	0x0002
+#define RBT_TRAFFIC_LAST	(RBT_TRAFFIC_TEST+1)
 
 /* Operation types, all types should be even
  */
@@ -39,10 +40,12 @@ typedef enum rbtrace_ring {
 
 #ifdef RBT_STR
 const char *rbt_tid_str[] = {
+	"NULL",
 	"LOST",
 	"TEST",
 };
 const char *rbt_fmt_str[] = {
+	"NULL",
 	"Lost %lld",
 	"OFF %#16llX LEN %#6llx DEV %#4d OP %04x",
 };
@@ -61,12 +64,12 @@ static uint64_t str_to_tflags(const char *str)
 
 	pch = strtok(ptr, ",");
 	while (pch != NULL) {
-		for (i = RBT_TRAFFIC_TEST; i < RBT_LAST; i++) {
+		for (i = RBT_TRAFFIC_TEST; i < RBT_TRAFFIC_LAST; i++) {
 			if (strcmp(pch, rbt_tid_str[i]) == 0) {
 				break;
 			}
 		}
-		if (i >= RBT_LAST) {
+		if (i >= RBT_TRAFFIC_LAST) {
 			tflags = 0;
 			goto out;
 		}
