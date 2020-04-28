@@ -177,7 +177,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	rfd = &rbt_rfd[ring];
 	if (rfd->fd == -1) {
 		dprintf("ring:%d invalid file descriptor!\n", ring);
-		return;
+		goto end;
 	}
 
 	cfg = &ring_cfgs[ring];
@@ -204,7 +204,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 	if (ret) {
 		dprintf("ring:%d write trace failed, error:%zd\n",
 			ring, ret);
-		return;
+		goto end;
 	} else {
 		/* Clear the buffer to avoid poison data */
 		memset(buf, 0, buf_size);
@@ -242,6 +242,7 @@ static void rbtrace_write_data(rbtrace_ring_t ring,
 		}
 	}
 
+ end:
 	lost = __sync_lock_test_and_set(&ri->ri_lost, 0);
 	flush = __sync_lock_test_and_set(&ri->ri_flush, 0);
 
@@ -324,8 +325,8 @@ static void *rbtrace_thread_fn(void *arg)
 				rbtrace_write_data(ring, false);
 			}
 			if (ri->ri_flags & RBTRACE_DO_FLUSH) {
-				ri->ri_flags &= ~RBTRACE_DO_FLUSH;
 				rbtrace_write_data(ring, true);
+				ri->ri_flags &= ~RBTRACE_DO_FLUSH;
 			}
 		}
 	}
@@ -397,7 +398,8 @@ int rbtrace_daemon_init(void)
 	}
 
 	/* Dump shared memory region if cored */
-	set_dump_shm();
+	update_coredump_filter();
+
 	/* Initialize global pointers */
 	rbtrace_globals_init(shm_fd, shm_base, shm_size, sem_ptr);
 	(*rbt_globals.fsize_ptr) = RBTRACE_DFT_FILE_SIZE;

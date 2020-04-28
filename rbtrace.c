@@ -226,7 +226,7 @@ size_t rbtrace_calc_shm_size(void)
 	return size;
 }
 
-void set_dump_shm()
+void update_coredump_filter(void)
 {
 	int rc = 0;
 	pid_t pid = getpid();
@@ -351,7 +351,8 @@ int rbtrace_init(void)
 	}
 
 	/* Dump shared memory region if cored */
-	set_dump_shm();
+	update_coredump_filter();
+
 	rbtrace_globals_init(shm_fd, shm_base, shm_size, sem_ptr);
 	return rc;
 

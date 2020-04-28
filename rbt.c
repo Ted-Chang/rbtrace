@@ -211,6 +211,7 @@ int main(int argc, char *argv[])
 			version();
 			goto out;
 		case 'h':	// Fall through
+			rc = 0;
 		default:
 			usage();
 			goto out;
@@ -228,12 +229,16 @@ int main(int argc, char *argv[])
 		op = RBTRACE_OP_WRAP;
 		rc = rbtrace_ctrl(opts.ring, op, &opts.wrap);
 		if (rc != 0) {
+			fprintf(stderr, "op:%s failed, error:%d\n",
+				rbtrace_op_to_str(op), rc);
 			goto out;
 		}
 	} else if (do_zap) {
 		op = RBTRACE_OP_ZAP;
 		rc = rbtrace_ctrl(opts.ring, op, &opts.zap);
 		if (rc != 0) {
+			fprintf(stderr, "op:%s failed, error:%d\n",
+				rbtrace_op_to_str(op), rc);
 			goto out;
 		}
 	}
@@ -242,6 +247,8 @@ int main(int argc, char *argv[])
 		opts.size *= ONE_MB; // Transfer to bytes
 		rc = rbtrace_ctrl(opts.ring, op, &opts.size);
 		if (rc != 0) {
+			fprintf(stderr, "op:%s failed, error:%d\n",
+				rbtrace_op_to_str(op), rc);
 			goto out;
 		}
 	}
@@ -249,12 +256,16 @@ int main(int argc, char *argv[])
 		op = RBTRACE_OP_OPEN;
 		rc = rbtrace_ctrl(opts.ring, op, opts.file);
 		if (rc != 0) {
+			fprintf(stderr, "op:%s failed, error:%d\n",
+				rbtrace_op_to_str(op), rc);
 			goto out;
 		}
 	} else if (do_close) {
 		op = RBTRACE_OP_CLOSE;
 		rc = rbtrace_ctrl(opts.ring, op, NULL);
 		if (rc != 0) {
+			fprintf(stderr, "op:%s failed, error:%d\n",
+				rbtrace_op_to_str(op), rc);
 			goto out;
 		}
 	}
@@ -264,6 +275,8 @@ int main(int argc, char *argv[])
 		op = RBTRACE_OP_TFLAGS;
 		rc = rbtrace_ctrl(opts.ring, op, &tflags_arg);
 		if (rc != 0) {
+			fprintf(stderr, "op:%s failed, error:%d\n",
+				rbtrace_op_to_str(op), rc);
 			goto out;
 		}
 	}
@@ -273,6 +286,8 @@ int main(int argc, char *argv[])
 		op = RBTRACE_OP_TFLAGS;
 		rc = rbtrace_ctrl(opts.ring, op, &tflags_arg);
 		if (rc != 0) {
+			fprintf(stderr, "op:%s failed, error:%d\n",
+				rbtrace_op_to_str(op), rc);
 			goto out;
 		}
 	}
@@ -280,6 +295,8 @@ int main(int argc, char *argv[])
 		op = RBTRACE_OP_INFO;
 		rc = rbtrace_ctrl(opts.ring, op, &info_arg);
 		if (rc != 0) {
+			fprintf(stderr, "op:%s failed, error:%d\n",
+				rbtrace_op_to_str(op), rc);
 			goto out;
 		} else {
 			dump_ring_info(&info_arg);
@@ -287,10 +304,6 @@ int main(int argc, char *argv[])
 	}
 
  out:
-	if (rc != 0) {
-		fprintf(stderr, "op:%s failed, error:%d\n",
-			rbtrace_op_to_str(op), rc);
-	}
 	if (rbtrace_inited) {
 		rbtrace_exit();
 	}

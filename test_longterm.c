@@ -5,22 +5,31 @@
 #include <stdlib.h>
 #include "rbtrace.h"
 
-#define NR_THREADS	2
+#define NR_THREADS	4
 
 volatile int x = 0;
 
 static void *print_thread(void *arg)
 {
-	while (1) {
+	while (1)  {
 		useconds_t us;
 		uint32_t v;
+		uint8_t id;
+		uint64_t a0;
+		uint64_t a1;
+		uint64_t a2;
 
-		us = rand() % 1000;
+		us = rand() % 500;
 		us *= 10;
 		usleep(us);
 
+		id = rand() % RBT_TRAFFIC_LAST;
+		a0 = rand();
+		a1 = rand();
+		a2 = rand();
 		v = __sync_add_and_fetch(&x, 1);
-		rbtrace(RBTRACE_RING_IO, RBT_TRAFFIC_TEST, x, 0, 0, 0);
+
+		rbtrace(RBTRACE_RING_IO, id, x, a0, a1, a2);
 		if ((v % 1000) == 0) {
 			printf("printed %u traces\n", v);
 		}
