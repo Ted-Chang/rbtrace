@@ -105,6 +105,21 @@ ringwrap_slot(struct ring_config *cfg,
 			 */
 			rbtrace_signal_thread(ri);
 		}
+
+		slot = __sync_add_and_fetch(&ri->ri_slot, 1);
+		if (slot < cfg->rc_size) {
+			re = ((struct rbtrace_entry *)
+			      (rbt_globals.re_base + ri->ri_cir_off)) + slot;
+			clock_gettime(CLOCK_REALTIME, &re->timestamp);
+			re->cpuid = (uint16_t)sched_getcpu();
+			re->thread = gettid();
+			return re;
+		}
+
+		__sync_val_compare_and_swap(&ri->ri_slot, slot, -1);
+		__sync_add_and_fetch(&ri->ri_lost, 1);
+		dprintf("ring:%d slot:%d trace lost\n", ri->ri_ring, slot);
+		return NULL;
 	} else {
 		int cnt = 1024;
 		while ((ri->ri_slot > cfg->rc_size) && (--cnt > 0)) {
@@ -125,21 +140,6 @@ ringwrap_slot(struct ring_config *cfg,
 		dprintf("ring:%d slot:%d lost\n", ri->ri_ring, slot);
 		return NULL;
 	}
-
-	slot = __sync_add_and_fetch(&ri->ri_slot, 1);
-	if (slot < cfg->rc_size) {
-		re = ((struct rbtrace_entry *)
-		      (rbt_globals.re_base + ri->ri_cir_off)) + slot;
-		clock_gettime(CLOCK_REALTIME, &re->timestamp);
-		re->cpuid = (uint16_t)sched_getcpu();
-		re->thread = gettid();
-		return re;
-	}
-
-	__sync_val_compare_and_swap(&ri->ri_slot, slot, -1);
-	__sync_add_and_fetch(&ri->ri_lost, 1);
-	dprintf("ring:%d slot:%d trace lost\n", ri->ri_ring, slot);
-	return NULL;
 }
 
 static struct rbtrace_entry *

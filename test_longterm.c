@@ -19,8 +19,7 @@ static void *print_thread(void *arg)
 		uint64_t a1;
 		uint64_t a2;
 
-		us = rand() % 500;
-		us *= 10;
+		us = rand() % 100;
 		usleep(us);
 
 		id = rand() % RBT_TRAFFIC_LAST;
