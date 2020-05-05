@@ -12,6 +12,8 @@
 #include "rbtrace_private.h"
 #include "version.h"
 
+#define RBTRACED_MAX_LINE	(512)
+
 #define RBTRACED_DFT_PID_FILE	"rbtraced.pid"
 #define RBTRACED_DFT_LOG_FILE	"rbtraced.log"
 
@@ -20,6 +22,7 @@ struct rbtrace_server {
 	char *logfile;
 	bool daemonize;
 	volatile sig_atomic_t terminate;
+	sem_t sem;
 } server = {
 	.pidfile = RBTRACED_DFT_PID_FILE,
 	.logfile = RBTRACED_DFT_LOG_FILE,
@@ -33,11 +36,20 @@ static void version(void);
 static void sig_handler(const int sig)
 {
 	if ((sig != SIGTERM) &&
-	    (sig != SIGQUIT)) {
+	    (sig != SIGQUIT) &&
+	    (sig != SIGINT)) {
 		return;
 	}
 
 	server.terminate = 1;
+	sem_post(&server.sem);
+}
+
+static void install_signal_handlers(void)
+{
+	(void)signal(SIGINT, sig_handler);
+	(void)signal(SIGTERM, sig_handler);
+	(void)signal(SIGQUIT, sig_handler);
 }
 
 static void daemonize(void)
@@ -62,34 +74,44 @@ static void daemonize(void)
 static void create_pid_file(void)
 {
 	int fd = -1;
-	char buf[256];
+	int err = 0;
+	char buf[RBTRACED_MAX_LINE];
 
 	if (server.pidfile == NULL) {
 		server.pidfile = RBTRACED_DFT_PID_FILE;
 	}
 	fd = open(server.pidfile, O_RDWR|O_CREAT, 0660);
 	if (fd < 0) {
+		err = errno;
 		fprintf(stderr, "open pid file:%s failed, %s\n",
-			server.pidfile,
-			strerror_r(errno, buf, sizeof(buf)));
-		exit(1);
+			server.pidfile,	strerror_r(err, buf, sizeof(buf)));
+		goto out;
 	}
-	if (lockf(fd, F_TLOCK, 0) < 0) {
+	if (lockf(fd, F_TLOCK, 0) != 0) {
+		err = errno;
 		fprintf(stderr, "lock pid file:%s failed, %s\n",
-			server.pidfile,
-			strerror_r(errno, buf, sizeof(buf)));
-		exit(0);
+			server.pidfile,	strerror_r(errno, buf, sizeof(buf)));
+		goto out;
+	}
+	if (ftruncate(fd, 0) != 0) {
+		err = errno;
+		fprintf(stderr, "ftruncate file:%s failed, %s\n",
+			server.pidfile,	strerror_r(errno, buf, sizeof(buf)));
+		goto out;
 	}
 	sprintf(buf, "%d\n", getpid());
 	write(fd, buf, strlen(buf));
+ out:
+	if (err != 0) {
+		exit(err);
+	}
 }
 
 int main(int argc, char *argv[])
 {
 	int rc = 0;
 	int ch;
-	int sig;
-	sigset_t set;
+	char buf[RBTRACED_MAX_LINE];
 
 	while ((ch = getopt(argc, argv, "dhp:l:v")) != -1) {
 		switch (ch) {
@@ -113,43 +135,41 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	(void)signal(SIGTERM, sig_handler);
-	(void)signal(SIGQUIT, sig_handler);
-
 	if (server.daemonize) {
 		daemonize();
 	}
 
+	rc = sem_init(&server.sem, 0, 0);
+	if (rc != 0) {
+		fprintf(stderr, "sem_init failed, %s\n",
+			strerror_r(errno, buf, sizeof(buf)));
+		goto out;
+	}
+
 	create_pid_file();
+
+	install_signal_handlers();
 
 	rc = rbtrace_daemon_init();
 	if (rc != 0) {
 		fprintf(stderr, "daemon init failed, error:%d\n", rc);
-		goto out;
+		goto cleanup;
 	}
-
-	sigemptyset(&set);
-	sigaddset(&set, SIGTERM);
-	sigaddset(&set, SIGQUIT);
-	sigaddset(&set, SIGINT);
 
 	while (!server.terminate) {
-		sig = 0;
-		sigwait(&set, &sig);
-		if ((sig == SIGTERM) ||
-		    (sig == SIGQUIT) ||
-		    (sig == SIGINT)) {
-			break;
-		}
+		sem_wait(&server.sem);
 	}
 
+	rbtrace_daemon_exit();
+
+ cleanup:
+	sem_destroy(&server.sem);
+	
+ out:
 	if (server.pidfile) {
 		unlink(server.pidfile);
 	}
 
-	rbtrace_daemon_exit();
-	
- out:
 	return rc;
 }
 
