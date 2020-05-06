@@ -7,6 +7,8 @@
 
 #define NR_THREADS	4
 
+#define MAX_LEN		100
+
 volatile int x = 0;
 
 static void *print_thread(void *arg)
@@ -23,7 +25,7 @@ static void *print_thread(void *arg)
 		usleep(us);
 
 		id = rand() % RBT_TRAFFIC_LAST;
-		a0 = rand();
+		a0 = rand() % MAX_LEN;
 		a1 = rand();
 		a2 = rand();
 		v = __sync_add_and_fetch(&x, 1);
