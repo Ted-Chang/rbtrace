@@ -79,14 +79,14 @@ plot ()
 
     i=0
 
-    for x in *_"$FILETYPE".out *_"$FILETYPE".*.out
+    for x in *_"$FILETYPE".rbt *_"$FILETYPE".*.rbt
     do
         if [ -e "$x" ]; then
             i=$((i+1))
 
             # Get operation type from log file
             # For example, the operation type for xxx-write_bw.out is write
-            PT=$(echo $x | sed 's/\(.*\)_'$FILETYPE'\(.*\).out$/\1\2/')
+            PT=$(echo $x | sed 's/\(.*\)_'$FILETYPE'\(.*\).rbt$/\1\2/')
             OP_TYPE=$(echo $PT | cut -d "-" -f 2)
 
             if [ ! -z "$PLOT_LINE" ]; then
