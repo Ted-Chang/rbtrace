@@ -2,7 +2,7 @@
 
 usage="usage: autotest.sh [option]
     -h print this help message
-    -N use current otraced instead of start a new one"
+    -N use current rbtraced instead of start a new one"
 
 die()
 {
@@ -10,7 +10,7 @@ die()
     exit -1
 }
 
-kill_otraced()
+kill_rbtraced()
 {
     _pid=$(pidof rbtraced)
     if [[ -n $_pid && ! -z "$_pid" ]]; then
@@ -18,7 +18,7 @@ kill_otraced()
     fi
 }
 
-start_otraced()
+start_rbtraced()
 {
     ./rbtraced -d
     # sleep a while for rbtraced to get ready
@@ -30,15 +30,48 @@ start_otraced()
     fi
 }
 
+rbtrace_config()
+{
+    ./rbt -S TEST
+    if [ $? -ne 0 ]; then
+        die "config rbtrace failed"
+    fi
+}
+
+# open_trace_file <filename>
+open_trace_file()
+{
+    ./rbt -o $1 -w on -s 32
+    if [ $? -ne 0 ]; then
+        die "rbt open trace file failed"
+    fi
+    sleep 1
+    if [ ! -r $1 ]; then
+        die "trace file not generated"
+    fi
+}
+
+# close_trace_file
 close_trace_file()
 {
     ./rbt -c
     if [ $? -ne 0 ]; then
-	echo "rbt close failed"
+        echo "rbt close failed"
     else
         # sleep a while for traces to be flushed
         sleep 4
     fi
+}
+
+# parse_trace_file <filename> <nr_traces>
+parse_trace_file()
+{
+    ./prbt -f $1 -o $1.txt
+    trace_nr=$(cat $1.txt | egrep "TEST|NULL" | wc -l)
+    if [ $trace_nr -ne $2 ]; then
+        die "trace record number inconsistent($trace_nr:$2)"
+    fi
+    rm -f $1.txt
 }
 
 ulimit -c unlimited
@@ -52,50 +85,49 @@ case "$1" in
 	close_trace_file
 	;;
     *)
-	# by default kill old otraced and start a new one
-	kill_otraced
-	start_otraced
+	# by default kill old rbtraced and start a new one
+	kill_rbtraced
+	start_rbtraced
 	;;
 esac
 
+TEST_ROUND=3
+TRACE_FILE_NAME=trace.rbt
 
-rm -f trace.dat*
-rm -f trace.txt
-./rbt -o trace.dat -z on -s 20
-if [ $? -ne 0 ]; then
-    die "rbt open trace file failed"
-fi
+rbtrace_config
 
-./rbt -S TEST
-if [ $? -ne 0 ]; then
-    die "rbt set trace ID failed"
-fi
+rm -f $TRACE_FILE_NAME
+rm -f $TRACE_FILE_NAME.txt
 
-./rbt -i
-if [ $? -ne 0 ]; then
-    die "rbt info failed"
-fi
+i=0
+while [ $i -lt $TEST_ROUND ]
+do
+    open_trace_file $TRACE_FILE_NAME
 
-./rbtbench -p 1 -t 1 -n 65536
-if [ $? -ne 0 ]; then
-    die "rbtbench failed"
-fi
+    ./rbt -i
+    if [ $? -ne 0 ]; then
+        die "rbt info failed"
+    fi
 
-# Close and flush trace file
-close_trace_file
+    # Start trace benchmark
+    ./rbtbench -p 1 -t 1 -n 65538
+    if [ $? -ne 0 ]; then
+        die "rbtbench failed"
+    fi
 
-_trace_file=$(ls trace.dat.*)
-./prbt -f $_trace_file -o trace.txt
-_trace_num=$(cat trace.txt | egrep "TEST|NULL" | awk '{print $7}' | wc -l)
-# rbtbench will record start and done in trace file for 1 op
-if [ $_trace_num -ne 131072 ]; then
-    die "trace record number inconsistent"
-fi
+    # Close and flush trace file
+    close_trace_file
 
-./rbt -o trace.dat -z on -s 20
-if [ $? -ne 0 ]; then
-    die "rbt open trace file failed"
-fi
+    # Parse trace file
+    parse_trace_file $TRACE_FILE_NAME 131076
+
+    rm -f "$TRACE_FILE_NAME"
+    rm -f "$TRACE_FILE_NAME.txt"
+
+    (( i++ ))
+done
+
+open_trace_file $TRACE_FILE_NAME
 
 ./test_segfault
 echo "test segfault done"
@@ -110,18 +142,20 @@ rm -f core.*
 
 close_trace_file
 
-kill $_pid
-_pid=$(pidof rbtraced)
-if [[ -n $_pid && ! -z "$_pid" ]]; then
-    die "kill rbtraced failed"
+./rbt -C TEST
+if [ $? -ne 0 ]; then
+    die "clear rbtrace failed"
 fi
+
+rm -f $TRACE_FILE_NAME*
+
+kill_rbtraced
+sleep 1
 if [ -e /dev/shm/rbtracebuf ]; then
     die "shared memory *not* cleaned"
 fi
 if [ -e /dev/shm/sem.rbtrace ]; then
     die "semaphore *not* cleaned"
 fi
-
-rm -f trace.dat*
 
 echo "Autotest passed."
